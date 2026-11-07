@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>Крушители: Клановые Войны — Prototype v0</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:#14101d; color:#e8e0d0;
+    font-family:"Courier New",monospace; user-select:none; -webkit-user-select:none;
+    touch-action:manipulation; overflow:hidden; overscroll-behavior:none; }
+  #app { display:flex; flex-direction:column; height:100%; max-width:480px; margin:0 auto; }
+
+  #hud { display:flex; justify-content:space-between; align-items:center;
+    background:#1d1830; border-bottom:2px solid #3b2f5e; padding:6px 10px; font-size:14px; }
+  #hud b { color:#ffd75e; }
+  #floorLbl { font-size:15px; font-weight:bold; color:#ff9f43; }
+  .souls { color:#b98cff; }
+
+  #stage { position:relative; flex:1 1 auto; min-height:0; }
+  canvas { width:100%; height:100%; display:block; image-rendering:pixelated; }
+
+  #ded { position:absolute; top:112px; left:8px; right:8px; margin:0 auto; max-width:320px;
+    background:rgba(20,14,40,.92); border:2px solid #6a5acd; border-radius:8px;
+    padding:8px 10px; font-size:12px; line-height:1.4; color:#cfd0ff;
+    opacity:0; transition:opacity .3s; pointer-events:none; }
+  #ded.show { opacity:1; }
+  #ded .who { color:#8f7cff; font-weight:bold; }
+  #note { position:absolute; bottom:8px; left:8px; right:8px; margin:0 auto; max-width:340px;
+    background:rgba(6,26,14,.94); border:1px dashed #7fd17f; border-radius:6px;
+    padding:6px 9px; font-size:11px; color:#9fe89f; display:none; }
+  #tut { position:absolute; bottom:50px; left:8px; right:8px; margin:0 auto; max-width:340px;
+    background:rgba(30,24,10,.93); border:1px dashed #ffd75e; border-radius:8px;
+    padding:7px 10px; font-size:11px; line-height:1.45; color:#ffe9b0; display:none; }
+  #tut b { color:#ffd75e; }
+  #tut.flash { animation:tutflash .7s; }
+  @keyframes tutflash { 0%{ box-shadow:0 0 0 0 #ffd75e00; } 50%{ box-shadow:0 0 14px 4px #ffd75e; } 100%{ box-shadow:0 0 0 0 #ffd75e00; } }
+
+  #panel { flex:0 0 auto; height:38%; display:flex; flex-direction:column; background:#191430; border-top:2px solid #3b2f5e; }
+  #tabs { display:flex; }
+  #tabs button { flex:1; background:#241d3f; border:none; border-bottom:2px solid #3b2f5e;
+    color:#9a92c0; font-family:inherit; font-size:13px; padding:9px 2px; cursor:pointer; }
+  #tabs button.active { background:#2e2652; color:#ffd75e; font-weight:bold; }
+  #content { flex:1; overflow-y:auto; padding:6px 8px 12px; }
+
+  .card { display:flex; align-items:center; gap:8px; background:#211a3e; border:1px solid #352a5e;
+    border-radius:8px; padding:7px 8px; margin-bottom:6px; }
+  .card .info { flex:1; min-width:0; }
+  .card .nm { font-size:13px; font-weight:bold; color:#e8e0d0; }
+  .card .st { font-size:11px; color:#9a92c0; margin-top:2px; }
+  .card.owned { border-color:#4f7a3a; }
+  .buy { background:#3d2f0a; color:#ffd75e; border:1px solid #7a5c14; border-radius:6px;
+    padding:8px 10px; font-family:inherit; font-size:12px; font-weight:bold; cursor:pointer; min-width:86px; }
+  .buy:disabled { background:#241f33; color:#5d5578; border-color:#352a5e; cursor:default; }
+  .buy.ready { background:#5a4410; animation:pulse 1.2s infinite; }
+  @keyframes pulse { 50% { box-shadow:0 0 6px 1px #ffd75e88; } }
+  h3.sec { font-size:12px; color:#8f7cff; margin:8px 0 5px; letter-spacing:1px; }
+  .tal { display:flex; justify-content:space-between; align-items:center; background:#211a3e;
+    border:1px solid #352a5e; border-radius:6px; padding:6px 8px; margin-bottom:4px; font-size:12px; }
+  .tal.done { border-color:#4f7a3a; }
+  .tal.done button { color:#7fd17f; border-color:#4f7a3a; }
+  #prestigeBtn { width:100%; background:#3b1d57; color:#e0c3ff; border:2px solid #8f5cff;
+    border-radius:8px; padding:11px; font-family:inherit; font-size:13px; font-weight:bold; cursor:pointer; }
+  #prestigeBtn:disabled { border-color:#4a3a70; color:#6a5a90; cursor:default; }
+  .small { font-size:10px; color:#776fa0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <span id="floorLbl">Этаж 1</span>
+    <span>💰 <b id="goldLbl">0</b></span>
+    <span class="souls" id="soulsLbl">👻 0</span>
+    <span id="muteBtn" style="cursor:pointer" title="Звук">🔊</span>
+  </div>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="ded"></div>
+    <div id="note"></div>
+    <div id="tut"></div>
+  </div>
+
+  <div id="panel">
+    <div id="tabs">
+      <button data-tab="tap" class="active">✊ КУЛАК</button>
+      <button data-tab="heroes">🛡 ГЕРОИ</button>
+      <button data-tab="souls">👻 ДУШИ</button>
+      <button data-tab="raid">⚔ РЕЙД</button>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= ДАННЫЕ ================= */
+const HEROES = [
+  { id:0, nm:"Слизень Ржавый",  base:1,   unlock:50 },
+  { id:1, nm:"Шут Помешанный",  base:5,   unlock:250 },
+  { id:2, nm:"Кузнец Долга",    base:22,  unlock:1200 },
+  { id:3, nm:"Огр Тупой",       base:74,  unlock:6000 },
+  { id:4, nm:"Девочка-Палач",   base:260, unlock:35000 },
+];
+const H_GROW=1.13, H_COST=1.085, T_GROW=1.65, T_COST=1.07;
+
+const TALENTS = {
+  tap: { nm:"🗡 Кликер",  nodes:[ {c:1,d:"Тап ×1.25"}, {c:2,d:"Тап ×1.5"}, {c:4,d:"Автотап 1/сек"}, {c:8,d:"Тап ×2"} ] },
+  leg: { nm:"🛡 Легион",  nodes:[ {c:1,d:"Герои ×1.25"}, {c:2,d:"Герои ×1.5"}, {c:4,d:"Цена героев −15%"}, {c:8,d:"Герои ×2"} ] },
+  mar: { nm:"💰 Мародёр", nodes:[ {c:1,d:"Золото ×1.25"}, {c:2,d:"Золото ×1.5"}, {c:4,d:"Боссы ×2 золото"}, {c:8,d:"Золото ×2"} ] },
+};
+
+const DED_BOSS = [
+  "В моё время боссы били больнее. И молча!",
+  "Этот жмот охраняет чужую ипотеку. Бей под калькуляцию!",
+  "Смотри на таймер, а не на меня. Смотри на таймер!",
+  "Кликай, как будто выбиваешь переплату по кредиту!",
+];
+const DED_FAIL = [
+  "Ничего. Он меньше HP. Мы не спешим — проверка, дело тонкое.",
+  "Дай ему отдышаться, а сам тем временем докупи героя.",
+  "Это был тактический перерыв. Я клянусь.",
+];
+const DED_IDLE = [
+  "Запомни: 5 быстрых тапов подряд — шестой бьёт как три.",
+  "Хочешь душ — продавай данж Кредо. Он переплачивает… почти.",
+  "Герои бьют сами. А тап — это твоё искусство.",
+  "Этаж 5. Жилец жалуется, что тапать больно. Пусть терпит. — Д.К.",
+];
+const NOTES = [
+  "— Записка у двери: «Кормим шумовика три раза в день. Тапа боится.»",
+  "— Жалоба жильца 5-го этажа: тапать больно. Вердикт Деда: пусть терпит.",
+  "— Объявление: «Профсоюз монстров собирается в 19:00. Принести мозги.»",
+  "— Квитанция: «Аренда этажа — 0 монет. Проверено киркой Деда.»",
+  "— Граффити: «КОНТРОША. ПЯТЬ БЫСТРО — ШЕСТОЙ В ТРОЙНУЮ.»",
+];
+
+/* ================= СОСТОЯНИЕ ================= */
+const SAVE_KEY = "krushiteli_save_v1";
+let S = null;
+
+function freshState(){
+  return {
+    gold:0, souls:0, floor:1, runBest:1, tapLvl:0,
+    heroLvl:[0,0,0,0,0],
+    tQty:{tap:0, leg:0, mar:0},
+    pity:0, firstPrestige:false, tapsDone:0, wave:1, hintKontra:false, tutFlags:{},
+    lastQuip:0, lastSeen:Date.now(), rateBuf:[], rate:0,
+    torches:3, glory:0, bestiary:0, lastTorchT:Date.now(),
+    opp:{n:"Рыцарь ЖЭК-3",t:1}, muted:false,
+  };
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    S = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
+  }catch(e){ S = freshState(); }
+  // оффлайн-доход: 60% в час, макс 8 ч
+  const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
+  if(dt>30 && S.rate>0){
+    const g = Math.floor(S.rate*dt*0.6);
+    if(g>0){ S.gold+=g;
+      setTimeout(()=>ded(`Пока тебя не было (${Math.ceil(dt/60)} мин), я потыкал киркой за тебя. Добыто: ${fmt(g)} 💰`), 1200);
+    }
+  }
+}
+function save(){
+  S.lastSeen = Date.now();
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){}
+  tgCloudSave();
+}
+
+/* ================= TELEGRAM MINI APP (не мешает обычному браузеру) ================= */
+const TG = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+/* SDK делает заглушку даже вне Telegram; реальная среда = platform != "unknown" */
+function tgLive(){ return !!(TG && TG.platform && TG.platform !== "unknown"); }
+let PLAYER_NAME = "наследник";
+let _tgCloudT = 0;
+function tgInit(){
+  if(!TG) return;
+  try{ TG.ready(); }catch(e){}
+  try{ TG.expand(); }catch(e){}
+  try{ TG.disableVerticalSwipes(); }catch(e){}
+  try{ TG.setHeaderColor("#14101d"); TG.setBackgroundColor("#14101d"); }catch(e){}
+  try{
+    const u = TG.initDataUnsafe && TG.initDataUnsafe.user;
+    if(u && (u.first_name || u.username)) PLAYER_NAME = u.first_name || u.username;
+  }catch(e){}
+}
+function tgGreet(){
+  if(tgLive() && PLAYER_NAME !== "наследник"){
+    ded("Та-ак… " + PLAYER_NAME + "! Наследство доехало. Вращай кулак — БАШНЯ сама себя не крушит.");
+  }
+}
+function haptic(kind, opt){
+  if(!TG || !TG.HapticFeedback) return;
+  try{
+    if(kind === "impact")      TG.HapticFeedback.impactOccurred(opt || "light");
+    else if(kind === "notify") TG.HapticFeedback.notificationOccurred(opt || "success");
+    else                       TG.HapticFeedback.selectionChanged();
+  }catch(e){}
+}
+/* облачное сохранение: пишем локально всегда, в Telegram — ещё и в CloudStorage (не чаще 10 сек) */
+function tgCloudSave(force){
+  if(!tgLive() || !TG.CloudStorage) return;
+  const now = Date.now();
+  if(!force && now - _tgCloudT < 10000) return;
+  _tgCloudT = now;
+  try{ TG.CloudStorage.setItem(SAVE_KEY, JSON.stringify(S), function(){}); }catch(e){}
+}
+/* при старте в Telegram: если облачный сейв свежее локального — берём его */
+function tgRestore(done){
+  if(!tgLive() || !TG.CloudStorage){ done(); return; }
+  try{
+    TG.CloudStorage.getItem(SAVE_KEY, function(err, raw){
+      try{
+        if(!err && raw){
+          const cloud = JSON.parse(raw);
+          if(cloud && (cloud.lastSeen || 0) > (S.lastSeen || 0)){
+            S = Object.assign(freshState(), cloud);
+            /* оффлайн-доход для облачного состояния */
+            const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
+            if(dt > 30 && S.rate > 0){
+              const g = Math.floor(S.rate*dt*0.6);
+              if(g > 0) S.gold += g;
+            }
+          }
+        }
+      }catch(e){}
+      done();
+    });
+  }catch(e){ done(); }
+}
+
+/* ================= ФОРМУЛЫ ================= */
+function fmt(n){
+  if(n<1000) return Math.floor(n).toString();
+  const u=[["T",1e12],["B",1e9],["M",1e6],["K",1e3]];
+  for(const [s,v] of u) if(n>=v) return (n/v).toFixed(1)+s;
+  return n.toString();
+}
+const monsterBase = f => 15*Math.pow(1.17,f-1);
+
+/* ============ ДУГА «Первые 10 этажей»: уникальные встречи ============ */
+const EARLY=[
+ {nm:"Пыльный Клоп",           sub:"квартирант со стажем", map:"slime",ov:{g:"#a07040",G:"#6a4a24",k:"#26150a"}, s:2.2, hp:14, gold:5,
+  note:"— Клоп: «Я прописан тут с 1974-го года. Молча.»"},
+ {nm:"Шумовик ЖЭК",            sub:"третья категория",     map:"rat",ov:{b:"#8f8f8f",k:"#2a2a2a"},             s:2.5, hp:18, gold:7,
+  note:"— Шумовик жалуется на сквозняк. Вердикт Деда: «Терпеть!»"},
+ {nm:"Мотылёк-Соглядатай",     sub:"шпион БАШНИ",          map:"bat",ov:{p:"#3fa4a0",r:"#ffd75e"},              s:2.4, hp:22, gold:9,
+  note:"— Мотылёк всё записывал в блокнот. Блокнот съел Слизень."},
+ {nm:"Плесень Прожорливая",    sub:"колония жильцов",      map:"slime",ov:{g:"#9e4ad0",G:"#6e2a9e"},            s:3.0, hp:26, gold:12,
+  note:"— Плесень выросла после протечки красного вина Рентодателя."},
+ {nm:"СТАЖЁР-РЕВИЗОР",         sub:"мини-босс · аттестация", map:"bones",ov:{w:"#a8c8e8",r:"#4a7ae0"},        s:3.6, hp:110, gold:120, mini:true,
+  intro:"Стажёр назначил тебе ПЕРЕАТТЕСТАЦИЮ! Покажи класс, наследник!",
+  note:"— Пропуск стажёра: «Проверяю этажи. Ужасаюсь.»"},
+ {nm:"Клоп-Матёрый",           sub:"ветеран подъезда",     map:"slime",ov:{g:"#7a4a22",G:"#4e2d12"},            s:2.6, hp:34, gold:15,
+  note:"— Клоп-Матёрый застал ещё твой прошлый престиж. Зазнайка."},
+ {nm:"Лифтёр-Кондуктор",       sub:"мартышка у рычага",    map:"bat",ov:{p:"#c94a9e"},                          s:2.7, hp:42, gold:18,
+  note:"— Лифтёр требует медяк за проезд. Идём пешком: бесплатно."},
+ {nm:"Крыса-Бухгалтер",        sub:"сводит дебет с кредитом", map:"rat",ov:{b:"#6a3a8a",k:"#1a0a2a"},           s:3.0, hp:50, gold:22,
+  note:"— Крыса-Бухгалтер: «Дебет — твой урон. Кредит — моё терпение.»"},
+ {nm:"Скелет-Сторож",          sub:"сам себе охрана",      map:"bones",ov:{w:"#d8d4c8"},                        s:3.4, hp:60, gold:27,
+  note:"— Скелет-Сторож охраняет самого себя. Гениальная экономия."},
+ {nm:"БОСС «Управляющий»",     sub:"первый настоящий босс", map:"skull",                                        s:4.2, hp:62, gold:90, boss:true,
+  note:"— Дед: «Вот он,遗症 корпорации. Бей под калькуляцию!»"},
+];
+/* Волны: на этаже 10 волн; волна 10 — кульминация (босс/элита/страж) */
+const MINION_NAMES=["Носильщик","Огрызок","Шумовик-стажёр","Клоп-близнец","Проглот","Свистун","Мух-соглядатай","Крыс-курьер","Подозрительный SOCK"];
+const BOSS_NAMES=["БОСС «Управляющий»","БОСС «Старший Кассир»","БОСС «Заместитель»","БОСС «Аудитор»","БОСС «Смотрящий»","БОСС «Рентодатель»","БОСС «Начальник Закупок»","БОСС «Профсоюзный Тролль»","БОСС «Гриф Кредитный»","БОСС «БАШНИ»"];
+function waveInfo(f,w){
+  if(w<10){
+    return {kind:"norm",
+      hp:Math.max(2.2, monsterBase(f)*0.08),
+      gold:3*Math.pow(1.15,f-1)*0.08,
+      name:MINION_NAMES[(f+w)%MINION_NAMES.length]};
+  }
+  // волна 10: кульминация
+  if(f%10===0){
+    const bn = f<=10 ? EARLY[9].nm : BOSS_NAMES[(Math.floor(f/10)-1)%BOSS_NAMES.length];
+    return {kind:"boss", hp:monsterBase(f)*10, gold:3*Math.pow(1.15,f-1)*25, name:bn};
+  }
+  if(f<=10){
+    const e=EARLY[f-1];
+    return {kind:e.boss?"boss":(e.mini?"mini":"guard"), hp:e.hp, gold:e.gold,
+      name:e.nm, sub:e.sub, map:e.map, ov:e.ov, s:e.s, note:e.note, intro:e.intro};
+  }
+  if(f%5===0) return {kind:"elite", hp:monsterBase(f)*4,  gold:3*Math.pow(1.15,f-1)*2,  name:"Элита этажа"};
+  return {kind:"guard", hp:monsterBase(f)*1.2, gold:3*Math.pow(1.15,f-1)*1.4, name:"Страж этажа"};
+}
+function tapDmg(){
+  let m=Math.pow(1.25,S.tQty.tap)*Math.pow(1.5,Math.max(0,S.tQty.tap-1))*(S.tQty.tap>=4?2:1);
+  return Math.pow(T_GROW,S.tapLvl)*m;
+}
+function heroDiscount(){ return S.tQty.leg>=3 ? 0.85 : 1; }
+function legMulti(){ return Math.pow(1.25,S.tQty.leg)*Math.pow(1.5,Math.max(0,S.tQty.leg-1))*(S.tQty.leg>=4?2:1); }
+function goldMulti(){ return Math.pow(1.25,S.tQty.mar)*Math.pow(1.5,Math.max(0,S.tQty.mar-1))*(S.tQty.mar>=4?2:1)*(1+(S.bestiary||0)*0.02); }
+function heroDps(i){ return HEROES[i].base*Math.pow(H_GROW,Math.max(0,S.heroLvl[i]-1))*legMulti(); }
+function heroCost(i){ return HEROES[i].unlock*Math.pow(H_COST,S.heroLvl[i])*heroDiscount(); }
+function tapCost(){ return 25*Math.pow(T_COST,S.tapLvl); }
+function bloodSynergy(){ return S.heroLvl[0]>=25 && S.heroLvl[3]>=25; }
+function totalDps(bossMode){
+  let d=0;
+  for(let i=0;i<HEROES.length;i++){
+    if(!S.heroLvl[i]) continue;
+    let m=1;
+    if((i===0||i===3)&&bloodSynergy()) m*=2;
+    if(bossMode&&i===2&&S.heroLvl[2]>=25) m*=2;
+    d+=heroDps(i)*m;
+  }
+  if(S.tQty.tap>=3) d+=tapDmg(); // автотап
+  return d;
+}
+function soulsGain(){ return Math.floor(Math.pow(Math.max(1,S.runBest)/8,1.25))*(S.firstPrestige?1:2); }
+
+/* ================= ЗВУК: WebAudio-чиптюн (без ассетов) ================= */
+let AC=null, musicStep=0, noiseBuf=null, muted=false;
+const muteBtnEl=document.getElementById("muteBtn");
+function audio(){
+  if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC=null; } }
+  if(AC&&AC.state==="suspended") AC.resume();
+}
+function beep(f,d,type,vol,when){
+  if(!AC||muted) return;
+  const t=(when||AC.currentTime);
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||"square"; o.frequency.setValueAtTime(f,t);
+  g.gain.setValueAtTime(vol||0.04,t); g.gain.exponentialRampToValueAtTime(0.001,t+d);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d);
+}
+function later(s){ return AC?AC.currentTime+s:0; }
+function noiseHit(t,d,vol){
+  if(!AC||muted) return;
+  if(!noiseBuf){
+    noiseBuf=AC.createBuffer(1,4096,22050);
+    const ch=noiseBuf.getChannelData(0);
+    for(let i=0;i<4096;i++) ch[i]=Math.random()*2-1;
+  }
+  const src=AC.createBufferSource(); src.buffer=noiseBuf;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(vol||0.02,t); g.gain.exponentialRampToValueAtTime(0.001,t+d);
+  src.connect(g); g.connect(AC.destination); src.start(t); src.stop(t+d);
+}
+/* чиптюн-петля: минорный данж-грув */
+const MEL =[440,0,392,0,329.63,0,293.66,0,261.63,0,329.63,0,293.66,246.94,0,0];
+const BASS=[110,0,110,87.31,0,98,0,82.41];
+setInterval(()=>{
+  if(!AC||muted||AC.state!=="running") return;
+  musicStep=(musicStep+1)%16;
+  const t=later(0.02);
+  if(MEL[musicStep])  beep(MEL[musicStep],0.20,"square",0.016,t);
+  if(musicStep%2===0){ const b=BASS[(musicStep/2)%8]; if(b) beep(b,0.24,"triangle",0.04,t); }
+  if(musicStep%4===0) noiseHit(t,0.05,0.016);
+},205);
+function sfxTap(){ beep(400+Math.random()*150,0.045,"square",0.03); }
+function sfxKontra(){ beep(180,0.12,"sawtooth",0.05); beep(240,0.12,"square",0.04,later(0.1)); }
+function sfxKill(){ beep(300,0.08,"square",0.04); beep(200,0.12,"triangle",0.04,later(0.07)); }
+function sfxBuy(){ beep(660,0.06,"square",0.035); beep(880,0.09,"square",0.035,later(0.06)); }
+function sfxBossIn(){ beep(110,0.3,"sawtooth",0.05); beep(82,0.4,"sawtooth",0.05,later(0.25)); }
+function sfxBossDie(){ [523,659,784,1047].forEach((f,i)=>beep(f,0.16,"square",0.04,later(i*0.11))); }
+function sfxFail(){ beep(220,0.2,"triangle",0.05); beep(165,0.3,"triangle",0.05,later(0.18)); }
+function sfxRaidIn(){ beep(140,0.25,"sawtooth",0.05); beep(93,0.35,"sawtooth",0.05,later(0.22)); }
+function sfxRaidKill(){ beep(520,0.07,"square",0.04); beep(700,0.09,"square",0.04,later(0.06)); }
+function sfxWin(){ [523,659,784,1046,784,1046].forEach((f,i)=>beep(f,0.15,"square",0.04,later(i*0.1))); }
+function sfxLose(){ [200,150,100].forEach((f,i)=>beep(f,0.25,"triangle",0.05,later(i*0.16))); }
+function sfxPrestige(){
+  if(!AC||muted) return;
+  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
+  o.type="sawtooth"; o.frequency.setValueAtTime(500,t); o.frequency.exponentialRampToValueAtTime(60,t+0.7);
+  g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.7);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.7);
+}
+function syncMute(){ muteBtnEl.textContent=muted?"🔇":"🔊"; }
+muteBtnEl.addEventListener("click",()=>{ muted=!muted; if(S)S.muted=muted; syncMute(); audio(); haptic("select"); });
+
+/* ================= FX: вспышки уровней ================= */
+let flashT=0;
+const heroFlash=[0,0,0,0,0];
+const SQUAD=[
+  {i:0,map:"slime", x:0.10,s:2.2,ov:{g:"#3fb0a0",G:"#2b7a70"}},   // Слизень Ржавый
+  {i:1,map:"clown", x:0.26,s:2.4},                                // Шут Помешанный
+  {i:2,map:"kuznec",x:0.42,s:2.6},                                // Кузнец Долга
+  {i:3,map:"ogre",  x:0.60,s:3.0,ov:{g:"#7aa84f"}},               // Огр Тупой
+  {i:4,map:"girl",  x:0.76,s:2.5,ov:{p:"#5a2a6e"}},               // Девочка-Палач
+];
+function heroFx(i){
+  heroFlash[i]=performance.now();
+  const x=SQUAD[i].x*CW;
+  for(let k=0;k<12;k++) parts.push({x,y:CH*0.72,vx:(Math.random()-0.5)*180,vy:-Math.random()*220,l:0.7,c:pick(["#ffd75e","#ffffff","#ff9f43"])});
+  addFloat(x,CH*0.64,"ур."+Math.max(1,S.heroLvl[i]),true);
+}
+function tapFx(){
+  addFloat(CW*0.42,CH*0.62,"КУЛАК ур "+(S.tapLvl+1),true);
+  for(let k=0;k<10;k++) parts.push({x:CW*0.42,y:CH*0.66,vx:(Math.random()-0.5)*160,vy:-Math.random()*180,l:0.6,c:"#ffd75e"});
+}
+function bigBurst(){
+  for(let i=0;i<30;i++) parts.push({x:CW/2+(Math.random()-0.5)*90,y:CH*0.55+(Math.random()-0.5)*70,
+    vx:(Math.random()-0.5)*320,vy:-Math.random()*320,l:0.8,c:pick(["#ffd75e","#e07b2a","#d84a3a","#ffffff"])});
+}
+
+/* ================= РЕЙД: Призрак подземелья (v0 — боты) ================= */
+const RAID={active:false,opp:null,kills:0,hp:0,max:0,base:0,tEnd:0,over:null};
+const OPP_A=["Рыцарь","Барыга","Мадам","Сэр","Грозная","Дедушка","Капитан"];
+const OPP_B=["ЖЭК-3","БЗПО","Топор","Специй","Плюш","Пиксель","Дебет","Черпак"];
+function rollOpp(){ S.opp={n:pick(OPP_A)+" "+pick(OPP_B),t:1+Math.floor(Math.random()*3)}; sfxBuy(); save(); }
+function regenTorches(){
+  if(S.torches>=3){ S.lastTorchT=Date.now(); return; }
+  while(S.torches<3 && Date.now()-S.lastTorchT>=600000){ S.torches++; S.lastTorchT+=600000; }
+  if(S.torches===3) S.lastTorchT=Date.now();
+}
+function startRaid(){
+  if(RAID.active||S.torches<=0||S.floor<3) return;
+  S.torches--; if(S.torches===2) S.lastTorchT=Date.now();
+  const base=Math.max(5,totalDps(false))*(6+S.opp.t*1.5);
+  RAID.active=true; RAID.over=null; RAID.kills=0;
+  RAID.opp={n:S.opp.n,t:S.opp.t};
+  RAID.base=base; RAID.max=base; RAID.hp=base;
+  RAID.tEnd=performance.now()+45000;
+  S.tutFlags.raid=true;
+  sfxRaidIn(); ded("Призрак "+S.opp.n+" подметает этаж. Факел в зубы!");
+  renderList(); refreshHud();
+}
+function killStrazh(now){
+  if(!RAID.opp) { RAID.active=false; return; }
+  RAID.kills++; burst(); sfxRaidKill();
+  addFloat(CW/2,CH*0.42,"СТРАЖ ПАЛ!",true);
+  if(RAID.kills>=3){ winRaid(); }
+  else { RAID.max=Math.round(RAID.base*(1+RAID.kills*0.35)); RAID.hp=RAID.max; }
+}
+function winRaid(){
+  const loot=Math.floor((3*Math.pow(1.15,S.floor-1))*30*goldMulti());
+  const stolen=Math.random()<0.25;
+  S.gold+=loot; S.glory+=50; if(stolen) S.bestiary++;
+  addRate(loot);
+  RAID.active=false;
+  RAID.over={win:true,loot,stolen,until:performance.now()+3200};
+  if(M.info&&M.info.kind==="boss") M.tStart=performance.now(); // таймер босса не горит во время рейда
+  bigBurst(); sfxWin(); haptic("notify","success"); refreshHud(); renderList(); save();
+}
+function loseRaid(){
+  S.glory+=10;
+  RAID.active=false;
+  RAID.over={win:false,until:performance.now()+3000};
+  if(M.info&&M.info.kind==="boss") M.tStart=performance.now();
+  sfxLose(); haptic("notify","error"); renderList(); save();
+}
+
+/* ================= БОЙ ================= */
+let M = { info:null, hp:0, max:0, tStart:0 };
+function spawnWave(){
+  M.info = waveInfo(S.floor, S.wave);
+  M.max  = M.info.kind==="boss" ? M.info.hp*Math.pow(0.9,S.pity) : M.info.hp;
+  M.hp = M.max; M.tStart = performance.now();
+  S.runBest = Math.max(S.runBest, S.floor);
+  if(S.wave===10){
+    if(M.info.kind==="boss"){ ded(pick(DED_BOSS)); sfxBossIn(); }
+    if(S.floor===3 && !S.hintKontra){ S.hintKontra=true; ded("5 быстрых тапов подряд — 6-й бьёт как три. Запомни: у меня память уже не та."); }
+    if(M.info.intro){ ded(M.info.intro); sfxRaidIn(); }
+    if(M.info.note) showNote(M.info.note);
+    else if(S.floor>10 && S.floor%5===0 && S.floor%10!==0) showNote(NOTES[Math.floor(S.floor/5)%NOTES.length]);
+  }
+}
+function spawnFloor(){ S.wave=1; spawnWave(); }
+function killReward(){
+  const kind=M.info.kind, wasBoss=kind==="boss";
+  const g = M.info.gold*goldMulti()*(kind==="boss"&&S.tQty.mar>=3?2:1);
+  S.gold+=g; addRate(g);
+  if(wasBoss){ shake=0.5; flashT=0.32; bigBurst(); sfxBossDie(); haptic("notify","success"); }
+  else if(kind==="mini"){ shake=0.3; flashT=0.18; bigBurst(); sfxRaidKill(); haptic("notify","success"); }
+  else { shake=0.1; burst(); sfxKill(); haptic("impact","medium"); }
+  S.pity=0;
+  if(S.wave===10){ // кульминация этажа повержена
+    S.tutFlags.climax=true;
+    if(kind==="boss") S.tutFlags.boss=true;
+  }
+  if(S.wave<10){ S.wave++; spawnWave(); }
+  else { S.floor++; S.wave=1; spawnWave(); }
+  refreshHud(); renderList();
+}
+function addRate(g){ S.rateBuf.push([Date.now(),g]); pruneRate(); }
+function pruneRate(){
+  const now=Date.now();
+  S.rateBuf=S.rateBuf.filter(e=>now-e[0]<60000);
+  S.rate=S.rateBuf.reduce((a,e)=>a+e[1],0)/60;
+}
+
+/* ================= ЦИКЛ ================= */
+let lastFrame=performance.now();
+function tick(now){
+  const dt=Math.min((now-lastFrame)/1000,0.25); lastFrame=now;
+  regenTorches();
+  flashT=Math.max(0,flashT-dt);
+  if(RAID.active){
+    RAID.hp-=totalDps(false)*dt; // в рейде анти-столла нет — будет stakes
+    if(RAID.hp<=0){ RAID.hp=0; killStrazh(now); }
+    else if(now>=RAID.tEnd){ loseRaid(); }
+  } else if(M.info){
+    let dps=totalDps(M.info.kind==="boss");
+    dps=Math.max(dps,M.hp*0.005); // анти-столл: дед поможет киркой
+    M.hp-=dps*dt;
+    if(M.info.kind==="boss"){
+      const rem=Math.max(0,30-(now-M.tStart)/1000);
+      if(S.floor===10 && rem<=1 && M.hp>1) M.hp=1; // гарантия новичка
+      if(rem<=0){ // провал: босс ждёт, HP «остывает»
+        S.pity++;
+        M.max=M.info.hp*Math.pow(0.9,S.pity); M.hp=M.max; M.tStart=now;
+        shake=Math.max(shake,0.25); sfxFail(); haptic("notify","error");
+        ded(pick(DED_FAIL));
+      } else if(M.hp<=0){ killReward(); }
+    } else if(M.hp<=0){ killReward(); }
+  }
+  if(RAID.over && now>RAID.over.until) RAID.over=null;
+  pruneRate();
+  draw(now);
+  requestAnimationFrame(tick);
+}
+
+/* ================= ТАП ================= */
+let streak=0,lastTap=0,kontra=false,shake=0;
+const floats=[],parts=[];
+function onTap(ev){
+  ev.preventDefault(); audio();
+  const r=cv.getBoundingClientRect();
+  const x=(ev.clientX-r.left)/r.width*CW, y=(ev.clientY-r.top)/r.height*CH;
+  const now=performance.now();
+  streak = (now-lastTap<280) ? streak+1 : 1;
+  lastTap=now;
+  let mult=1;
+  if(streak>=5){ kontra=true; streak=0; showKontra(); }
+  if(kontra){ mult=3; kontra=false; }
+  if(mult>1) S.tutFlags.kontra=true;
+  const dmg=tapDmg()*mult;
+  if(RAID.active){
+    RAID.hp-=dmg; addFloat(x,y,fmt(dmg),mult>1); shake=Math.max(shake,0.1);
+    if(RAID.hp<=0){ RAID.hp=0; killStrazh(now); }
+  } else if(M.info){
+    M.hp-=dmg; addFloat(x,y,fmt(dmg),mult>1);
+    if(M.info.kind==="boss") shake=Math.max(shake,0.16);
+    if(M.hp<=0){ M.hp=0; killReward(); }
+  }
+  shake=Math.max(shake,0.12); S.tapsDone++;
+  for(let i=0;i<4;i++) parts.push({x,y,vx:(Math.random()-0.5)*140,vy:-Math.random()*160,l:0.5,c:"#ffd75e"});
+  sfxTap(); if(mult>1) sfxKontra();
+  haptic("impact", mult>1?"medium":"light");
+}
+function showKontra(){ floats.push({x:CW/2,y:CH*0.3,vy:-40,l:0.9,txt:"КОНТРОША! ×3",kick:true}); }
+
+/* ================= РИСОВАНИЕ ================= */
+const cv=document.getElementById("cv");
+const ctx=cv.getContext("2d");
+const CW=360, CH=340;
+cv.width=CW; cv.height=CH;
+const PAL={ g:"#4a9e3f",G:"#2d7a26",p:"#7a4a9e",w:"#e8e4d8",k:"#191019",
+            r:"#d84a3a",y:"#ffd75e",b:"#8a5a30",o:"#e07b2a" };
+const SPRITES={
+ slime:[
+ "............",
+ "....gggg....",
+ "...gggggg...",
+ "..gggggggg..",
+ ".ggkgggggkg.".replace(" ","g"),
+ ".gggggggggg.",
+ "gggggggggggg",
+ "gggggggggggg",
+ ".gggggggggg.",
+ "..gggggggg..",
+ "....bbbb....",
+ "....bbbb...."],
+ clown:[
+ "............",
+ "....pppp....",
+ "...pppppp...",
+ "..yppppppy..",
+ "..pkppppkp..",
+ "..pppppppp..",
+ ".ryppppppyr.",
+ "..pppyyppp..",
+ "..pppppppp..",
+ "..pp....pp..",
+ "..bb....bb.."],
+ kuznec:[
+ "............",
+ "...bbbbbb...",
+ "..bbbbbbbb..",
+ "..bkbbbbkb..",
+ "..bbbbbbbb..",
+ "...oooooo...",
+ "..bbbbbbbb..",
+ ".bbbbbbbbbb.",
+ ".bbbbbbbbbb.",
+ "..bb....bb..",
+ "..bb....bb..",
+ "..oo....oo.."],
+ ogre:[
+ "............",
+ "...gggggg...",
+ "..gggggggg..",
+ ".gkggggggkg.",
+ ".gggggggggg.",
+ ".ggkkkkkkgg.",
+ "..gggggggg..",
+ ".gggggggggg.",
+ "gggggggggggg",
+ "gggggggggggg",
+ ".GG......GG.",
+ ".GG......GG."],
+ girl:[
+ "............",
+ "....rrrr....",
+ "...rrrrrr...",
+ "...wwwwww...",
+ "..wwkwwkww..",
+ "...wwwwww...",
+ "....pppp....",
+ "...pppppp...",
+ "...pppppp...",
+ "....pppp....",
+ "....pppp....",
+ "....kkkk...."],
+ bat:[
+ "....pppp....",
+ "...pppppp...",
+ "..pppppppp..",
+ ".pppppppppp.",
+ ".pkppppppkp.",
+ "wpkprpprpkpw",
+ "wppppppppppw",
+ ".pppppppppp.",
+ "..pp....pp..",
+ "...p....p..."],
+ rat:[
+ "............",
+ "............",
+ "..bbbbb.....",
+ ".bbbrrbbbbb.",
+ ".bbbrrbbbbbb",
+ "bbbbbkkbbbbb",
+ "bbbbbbbbbbbb",
+ ".bbbbbbbbbb.",
+ "..bb....bb..",
+ "...b....b..."],
+ skull:[
+ "....wwww....",
+ "...wwwwww...",
+ "..wwwwwwww..",
+ "..wkkwwkkw..",
+ "..wkkwwkkw..",
+ ".rwwwwwwwwr.",
+ ".rwwwkkwwwr.",
+ "..wwkkkkww..",
+ "....wwww....",
+ "....w..w....",
+ "...w....w..."],
+};
+const MONSET=[["slime","rat","bat"],["rat","bat","slime"],["bat","slime","rat"]];
+function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+function drawSpr(map,cx,cy,s,ov){
+  const w=map[0].length, h=map.length;
+  const ox=Math.round(cx-w*s/2), oy=Math.round(cy-h*s/2);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const ch=map[y][x];
+    if(ch==="."||ch===" ") continue;
+    ctx.fillStyle= ov==="FLASH" ? "#ffffff" : ((ov&&ov[ch])||PAL[ch]||"#fff");
+    ctx.fillRect(ox+x*s,oy+y*s,s,s);
+  }
+}
+function drawCrown(cx,top,s){
+  const w=8*s;
+  for(let i=0;i<4;i++){
+    const bx=cx-w/2+i*(w/4);
+    ctx.fillRect(bx,top,w/4-1,s*0.8);
+  }
+  ctx.fillRect(cx-w/2,top+s*0.7,w,s*0.4);
+}
+/* Палитры локаций: смена каждые 10 этажей */
+const ZONES=[
+  {nm:"Катакомбы",       wallA:"#2b2344",wallB:"#231c38",brick:"#1b1529",arch:"#171226",floorA:"#241d3a",floorB:"#1d1730",line:"#120e20",glow:"#ff9f43"},
+  {nm:"Мшистые пещеры",  wallA:"#22301e",wallB:"#1b2718",brick:"#141d12",arch:"#101a0f",floorA:"#1e2a1a",floorB:"#182116",line:"#0f150d",glow:"#7fd17f"},
+  {nm:"Глубины БАШНИ",   wallA:"#3a1d29",wallB:"#301720",brick:"#220e16",arch:"#1a0a11",floorA:"#2c1620",floorB:"#230f17",line:"#160609",glow:"#ff7043"},
+];
+function zonePal(f){ return ZONES[Math.floor((Math.max(1,f)-1)/10)%ZONES.length]; }
+
+function draw(now){
+  ctx.imageSmoothingEnabled=false;
+  /* ---- ФОН: комната подземелья ---- */
+  const pal=(RAID.active||RAID.over)?ZONES[2]:zonePal(S.floor);
+  const wallH=Math.floor(CH*0.66);
+  // кирпичная стена
+  for(let row=0;row<Math.ceil(wallH/14);row++){
+    const y=row*14;
+    ctx.fillStyle=row%2?pal.wallA:pal.wallB;
+    ctx.fillRect(0,y,CW,14);
+    ctx.fillStyle=pal.brick;
+    const off=row%2?0:12;
+    for(let x=off;x<CW;x+=24) ctx.fillRect(x,y,2,14);
+    ctx.fillRect(0,y+13,CW,1);
+  }
+  // арка позади противника (дверь в следующий этаж)
+  const ax=CW/2-64, aw=128, ay=wallH-112;
+  ctx.fillStyle=pal.arch;
+  ctx.fillRect(ax,ay,aw,wallH-ay);
+  ctx.beginPath(); ctx.arc(CW/2,ay,64,Math.PI,0); ctx.fill();
+  ctx.fillStyle="rgba(0,0,0,0.28)";
+  ctx.fillRect(ax+10,ay+8,aw-20,wallH-ay-8);
+  // цепи по краям
+  ctx.fillStyle="#3a3452";
+  [72,CW-76].forEach(x=>{
+    for(let y=0;y<64;y+=8) ctx.fillRect(x,y,4,6);
+    ctx.fillRect(x-4,64,12,7);
+  });
+  // факелы с живым пламенем
+  [40,CW-40].forEach((tx,ti)=>{
+    const fl=(Math.sin(now/110+ti*2.1)+1)/2;
+    ctx.fillStyle="#5e3a1c"; ctx.fillRect(tx-3,wallH-88,6,24);
+    const fh=10+fl*6;
+    ctx.fillStyle="rgba(255,160,80,0.07)";
+    ctx.beginPath(); ctx.arc(tx,wallH-95,56+fl*10,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=pal.glow; ctx.fillRect(tx-3,wallH-96-fh,6,fh+4);
+    ctx.fillStyle="#ffd75e"; ctx.fillRect(tx-2,wallH-93-fh*0.65,4,fh*0.55);
+  });
+  // пол (перспективные ряды плит)
+  const fy=wallH;
+  let ry=fy, rh=10;
+  for(let i=0;i<8&&ry<CH;i++){
+    ctx.fillStyle=i%2?pal.floorA:pal.floorB;
+    ctx.fillRect(0,ry,CW,rh);
+    ctx.fillStyle=pal.line;
+    for(let x=(i%2?18:0);x<CW;x+=36) ctx.fillRect(x,ry,2,rh);
+    ctx.fillRect(0,ry+rh-1,CW,1);
+    ry+=rh; rh+=3;
+  }
+  // виньетка по краям
+  ctx.fillStyle="rgba(0,0,0,0.30)"; ctx.fillRect(0,0,CW,10);
+  ctx.fillStyle="rgba(0,0,0,0.18)"; ctx.fillRect(0,0,12,CH); ctx.fillRect(CW-12,0,12,CH);
+  // название локации
+  ctx.fillStyle="rgba(232,224,208,0.45)"; ctx.font="9px monospace"; ctx.textAlign="left";
+  ctx.fillText(pal.nm, 16, 22);
+  ctx.textAlign="center";
+
+  let shx=0,shy=0;
+  if(shake>0){ shake-=0.016; shx=(Math.random()-0.5)*8; shy=(Math.random()-0.5)*6; }
+  ctx.save(); ctx.translate(shx,shy);
+
+  if(RAID.active||RAID.over){
+    drawRaidScene(now);
+  } else if(M.info){
+    const s=M.info.s||(M.info.kind==="boss"?4.2:M.info.kind==="elite"?3.4:3.0);
+    const sprite2=M.info.map?SPRITES[M.info.map]:(M.info.kind==="boss"?SPRITES.skull:SPRITES[MONSET[(S.floor>>2)%3][S.floor%3]]);
+    const midX=CW/2, midY=CH*0.60;
+    // тень под противником
+    ctx.fillStyle="rgba(0,0,0,0.35)";
+    ctx.beginPath(); ctx.ellipse(midX, fy+6, s*13, 10, 0, 0, Math.PI*2); ctx.fill();
+    if(M.info.kind!=="norm") drawCrown(midX, midY-sprite2.length*s/2-16, s);
+    drawSpr(sprite2, midX, midY, s, M.info.ov);
+    if(M.info.kind==="boss"){ drawBossBar(now,false); }
+    else if(M.info.kind==="mini"){ drawBossBar(now,true); }
+    else {
+      const bw=CW*0.72, bh=14, bx=(CW-bw)/2, by=CH*0.14;
+      ctx.fillStyle="#0e0a1a"; ctx.fillRect(bx-2,by-2,bw+4,bh+4);
+      ctx.fillStyle="#2d1a1a"; ctx.fillRect(bx,by,bw,bh);
+      const frac=Math.max(0,M.hp/M.max);
+      ctx.fillStyle=frac>0.5?"#4a9e3f":frac>0.2?"#e07b2a":"#d84a3a";
+      ctx.fillRect(bx,by,bw*frac,bh);
+      ctx.fillStyle="#e8e0d0"; ctx.font="bold 10px monospace"; ctx.textAlign="center";
+      ctx.fillText(M.info.name+"  "+fmt(M.hp)+" / "+fmt(M.max), CW/2, by+bh-3.5);
+    }
+    drawWavePips();
+  } else {
+    ctx.fillStyle="#4a3660"; ctx.font="16px monospace"; ctx.textAlign="center";
+    ctx.fillText("в следующий этаж…", CW/2, CH*0.60);
+  }
+
+  /* ---- Отряд героев (только в данже, не поверх рейда) ---- */
+  if(!(RAID.active||RAID.over)){
+  const HY=fy+14;
+  ctx.textAlign="center";
+  SQUAD.forEach((h,k)=>{
+    if(!S.heroLvl[h.i]) return;
+    const map=SPRITES[h.map], rows=map.length, halfH=rows*h.s/2;
+    const attack=((now+k*170)%1000)<150;
+    const bob=attack?Math.sin(now/40)*2:Math.sin(now/300+k*1.3)*2;   // то дышит, то прыгает в атаке
+    const dx=attack?(h.x*CW<CW/2?5:-5):0;                           // выпад в сторону противника
+    const cx=h.x*CW+dx, cy=HY-bob-halfH;
+    // тень
+    ctx.fillStyle="rgba(0,0,0,0.30)";
+    ctx.beginPath(); ctx.ellipse(h.x*CW+dx*0.4,HY+2,12,3.5,0,0,Math.PI*2); ctx.fill();
+    drawSpr(map,cx,cy,h.s,h.ov);
+    // вспышка удара между героем и противником
+    if(attack&&M.info){
+      ctx.fillStyle="rgba(255,255,255,0.65)";
+      ctx.fillRect((cx+CW/2)/2-4, cy-6, 8, 2);
+    }
+    // метка уровня
+    ctx.fillStyle="rgba(232,224,208,0.55)"; ctx.font="8px monospace";
+    ctx.fillText("ур."+S.heroLvl[h.i], h.x*CW, HY+13);
+    // вспышка при повышении уровня
+    const ft=now-heroFlash[h.i];
+    if(ft<280){ ctx.globalAlpha=(1-ft/280)*0.85; drawSpr(map,cx,cy,h.s,"FLASH"); ctx.globalAlpha=1; }
+  });
+  }
+
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i]; p.l-=0.016; p.x+=p.vx*0.016; p.y+=p.vy*0.016; p.vy+=300*0.016;
+    if(p.l<=0){ parts.splice(i,1); continue; }
+    ctx.fillStyle=p.c; ctx.fillRect(p.x,p.y,3,3);
+  }
+  for(let i=floats.length-1;i>=0;i--){
+    const f=floats[i]; f.l-=0.016; f.y+=f.vy*0.016; f.vy*=0.97;
+    if(f.l<=0){ floats.splice(i,1); continue; }
+    ctx.globalAlpha=Math.min(1,f.l*1.6);
+    ctx.font=f.kick?"bold 17px monospace":"bold 13px monospace";
+    ctx.fillStyle=f.kick?"#ff9f43":"#ffd75e";
+    ctx.strokeStyle="#191019"; ctx.lineWidth=3; ctx.textAlign="center";
+    ctx.strokeText(f.txt,f.x,f.y); ctx.fillText(f.txt,f.x,f.y);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+  if(flashT>0){ ctx.fillStyle="rgba(255,255,255,"+Math.min(0.4,flashT*1.4).toFixed(3)+")"; ctx.fillRect(0,0,CW,CH); }
+}
+function addFloat(x,y,txt,crit){ floats.push({x,y,vy:-70,l:0.9,txt,kick:crit}); }
+function burst(){
+  for(let i=0;i<14;i++) parts.push({x:CW/2+(Math.random()-0.5)*80,y:CH*0.5+(Math.random()-0.5)*50,
+    vx:(Math.random()-0.5)*220,vy:-Math.random()*220,l:0.6,c:pick(["#ffd75e","#e07b2a","#d84a3a","#7fd17f"])});
+}
+
+/* Пипсы волн: 10 ячеек над полосой HP */
+function drawWavePips(){
+  const y=CH*0.105, x0=CW/2-45;
+  for(let i=0;i<10;i++){
+    ctx.fillStyle = i<S.wave-1 ? "#ffd75e" : (i===S.wave-1 ? "#ff9f43" : "#2a2148");
+    ctx.fillRect(x0+i*10, y, 7, 4);
+  }
+}
+/* Боссбар: широкая рамка, насечки, пульсирующий таймер (mini = без таймера) */
+function drawBossBar(now,mini){
+  const w=CW*0.84, h=18, x=(CW-w)/2, y=CH*0.13;
+  const rem=Math.max(0,30-(now-M.tStart)/1000);
+  const hot=!mini&&rem<10, pulse=0.5+0.5*Math.sin(now/90);
+  ctx.fillStyle="#0e0a1a"; ctx.fillRect(x-4,y-4,w+8,h+8);
+  ctx.strokeStyle=hot?("rgba(216,74,58,"+(0.45+0.55*pulse).toFixed(2)+")"):(mini?"#d1861a":"#7a5c14");
+  ctx.lineWidth=2; ctx.strokeRect(x-2,y-2,w+4,h+4);
+  ctx.fillStyle="#2d1a1a"; ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=mini?"#e0a330":"#d84a3a"; ctx.fillRect(x,y,w*Math.max(0,M.hp/M.max),h);
+  ctx.fillStyle="rgba(255,255,255,0.22)"; ctx.fillRect(x,y,w,h*0.28);
+  ctx.fillStyle="#0e0a1a";
+  for(let i=1;i<10;i++) ctx.fillRect(x+Math.round(w*i/10),y,1,h);
+  ctx.fillStyle="#e8e0d0"; ctx.font="bold 10px monospace"; ctx.textAlign="center";
+  ctx.fillText("☠ "+M.info.name+(mini?" · "+(M.info.sub||"аттестация"):"")+"  "+fmt(M.hp)+" / "+fmt(M.max), CW/2, y+h-6);
+  if(!mini){
+    const remTxt="⏱ "+rem.toFixed(1)+" сек"+(S.pity?"  (PITY −"+Math.round(S.pity*10)+"% HP)":"");
+    ctx.fillStyle=hot?"#d84a3a":"#ffd75e"; ctx.font="bold 14px monospace";
+    ctx.fillText(remTxt, CW/2, y+h+19);
+  }
+}
+/* Сцена рейда: призрачный страж + таймер + итог */
+function drawRaidScene(now){
+  ctx.textAlign="center";
+  if(RAID.over){
+    const o=RAID.over, rem=Math.max(0,(o.until-now)/1000);
+    ctx.fillStyle="rgba(12,8,26,0.78)"; ctx.fillRect(0,CH*0.2,CW,CH*0.46);
+    ctx.fillStyle=o.win?"#7fd17f":"#d84a3a"; ctx.font="bold 24px monospace";
+    ctx.fillText(o.win?"⚔ ПОБЕДА! ⚔":"ОТСТУПИЛИ…", CW/2, CH*0.33);
+    ctx.fillStyle="#e8e0d0"; ctx.font="12px monospace";
+    if(o.win){
+      ctx.fillText("Слава +50", CW/2, CH*0.43);
+      ctx.fillText("Добыча: "+fmt(o.loot)+" 💰", CW/2, CH*0.49);
+      if(o.stolen) ctx.fillText("Монстр украден в Бестиарий! (+2% золота)", CW/2, CH*0.55);
+    } else {
+      ctx.fillText("Стражи отстояли свой клад.", CW/2, CH*0.45);
+      ctx.fillText("Качай героев и вернись!", CW/2, CH*0.51);
+    }
+    ctx.fillStyle="rgba(232,224,208,0.55)"; ctx.font="10px monospace";
+    ctx.fillText("в подземелье через "+Math.ceil(rem)+"…", CW/2, CH*0.61);
+    return;
+  }
+  const s=3.8, midY=CH*0.48, gY=Math.floor(CH*0.66);
+  ctx.fillStyle="rgba(0,0,0,0.35)";
+  ctx.beginPath(); ctx.ellipse(CW/2,gY+8,s*14,10,0,0,Math.PI*2); ctx.fill();
+  drawSpr(SPRITES.skull,CW/2,midY,s,{w:"#cfe8ff",r:"#9ff3c9",k:"#26333f"});
+  const w=CW*0.7,h=12,x=(CW-w)/2,y=CH*0.20;
+  ctx.fillStyle="#0e0a1a"; ctx.fillRect(x-2,y-2,w+4,h+4);
+  ctx.fillStyle="#23303a"; ctx.fillRect(x,y,w,h);
+  ctx.fillStyle="#66d9e8"; ctx.fillRect(x,y,w*Math.max(0,RAID.hp/RAID.max),h);
+  ctx.fillStyle="#cfe8ff"; ctx.font="bold 10px monospace";
+  ctx.fillText("СТРАЖ "+(RAID.kills+1)+"/3 — "+RAID.opp.n,CW/2,y+h-3);
+  for(let i=0;i<3;i++){ ctx.fillStyle=i<RAID.kills?"#66d9e8":"#23303a"; ctx.fillRect(CW/2-24+i*18,y+h+8,10,4); }
+  const rem=Math.max(0,(RAID.tEnd-now)/1000);
+  ctx.fillStyle=rem<10?"#d84a3a":"#66d9e8"; ctx.font="bold 16px monospace";
+  ctx.fillText("⏱ "+rem.toFixed(1)+" сек", CW/2, y+h+32);
+  ctx.fillStyle="rgba(232,224,208,0.45)"; ctx.font="9px monospace";
+  ctx.fillText("Слава: 💠 "+S.glory+"   Факелы: "+("🔥".repeat(S.torches)||"—"), CW/2, CH*0.09);
+}
+const dedEl=document.getElementById("ded"), noteEl=document.getElementById("note");
+let dedT=null,noteT=null;
+function ded(txt){
+  dedEl.innerHTML="<span class='who'>Призрак Деда Крушителя:</span> "+txt;
+  dedEl.classList.add("show");
+  clearTimeout(dedT); dedT=setTimeout(()=>dedEl.classList.remove("show"),4200);
+}
+function showNote(txt){
+  noteEl.textContent=txt; noteEl.style.display="block";
+  clearTimeout(noteT); noteT=setTimeout(()=>noteEl.style.display="none",4000);
+}
+setInterval(()=>{ if(performance.now()-S.lastQuip>90000){ S.lastQuip=performance.now(); ded(pick(DED_IDLE)); } },15000);
+
+/* ================= UI ================= */
+const $=id=>document.getElementById(id);
+function refreshHud(){
+  const boss=M.info&&M.info.kind==="boss";
+  $("floorLbl").textContent="Этаж "+S.floor+(boss?" — БОСС":" · Волна "+S.wave+"/10");
+  $("goldLbl").textContent=fmt(S.gold);
+  $("soulsLbl").textContent="👻 "+S.souls;
+}
+let curTab="tap";
+document.querySelectorAll("#tabs button").forEach(b=>{
+  b.onclick=()=>{ curTab=b.dataset.tab;
+    document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x===b));
+    renderList(); };
+});
+const content=$("content");
+function buyBtn(txt,enabled,fn){
+  return `<button class="buy ${enabled?"ready":""}" ${enabled?"":"disabled"} data-fn="${fn}">${txt}</button>`;
+}
+function renderList(){
+  if(curTab==="tap"){
+    content.innerHTML=`
+      <div class="card">
+        <div class="info">
+          <div class="nm">Кулак Крушителя ур.${S.tapLvl+1}</div>
+          <div class="st">Тап-урон: ${fmt(tapDmg())} | Герои DPS: ${fmt(totalDps(M.info&&M.info.kind==="boss"))}</div>
+          <div class="st small">5 быстрых тапов → 6-й бьёт ×3 («Контроша»)</div>
+        </div>
+        ${buyBtn("💰 "+fmt(tapCost()), S.gold>=tapCost(), "buyTap")}
+      </div>`;
+  }
+  if(curTab==="heroes"){
+    let h=`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. Связка «Кровопийцы»: Слизень 25 ур + Огр 25 ур → оба ×2 DPS.</div>`;
+    HEROES.forEach(hr=>{
+      const l=S.heroLvl[hr.id], cost=heroCost(hr.id);
+      const dps=l?fmt(heroDps(hr.id)):0;
+      h+=`<div class="card ${l?"owned":""}">
+        <div class="info">
+          <div class="nm">${hr.nm} <span class="small">${l?"ур."+l:"не нанят"}</span></div>
+          <div class="st">${l?("DPS: "+dps):("найм за "+fmt(hr.unlock)+" золота")}
+            ${hr.id===2&&l>=25?" | ×2 против боссов":""}
+            ${bloodSynergy()&&(hr.id===0||hr.id===3)?" | КРОВОПИЙЦЫ!":""}</div>
+        </div>
+        ${buyBtn("💰 "+fmt(cost), S.gold>=cost, "buyHero"+hr.id)}
+      </div>`;
+    });
+    content.innerHTML=h;
+  }
+  if(curTab==="souls"){
+    const can=S.floor>=20;
+    let h=`<button id="prestigeBtn" ${can?"":"disabled"} data-fn="prestige">
+        ${can?`👻 ПРОДАТЬ ДАНЖ КРЕДО — ДУШ × ${fmt(soulsGain())}${S.firstPrestige?"":" (×2 первый раз!)"}`:"👻 Престиж с 20-го этажа (ты на "+S.floor+")"}
+      </button>
+      <div class="small" style="margin:4px 0 8px">Сброс: этажи, монеты, герои, кулак. Души и древо остаются навсегда.</div>`;
+    for(const key of ["tap","leg","mar"]){
+      const t=TALENTS[key], n=S.tQty[key];
+      h+=`<h3 class="sec">${t.nm} (${n}/${t.nodes.length})</h3>`;
+      t.nodes.forEach((nd,i)=>{
+        if(i<n) h+=`<div class="tal done"><span>${nd.d}</span><button class="buy" disabled>✔</button></div>`;
+        else if(i===n) h+=`<div class="tal"><span>${nd.d}</span>${buyBtn("👻 "+nd.c, S.souls>=nd.c, "buyTal_"+key)}</div>`;
+        else h+=`<div class="tal"><span class="small">🔒 дальше</span></div>`;
+      });
+    }
+    content.innerHTML=h;
+  }
+  if(curTab==="raid"){
+    const wait=Math.max(0,600000-(Date.now()-S.lastTorchT));
+    const mm=Math.floor(wait/60000), ss=String(Math.floor(wait%60000/1000)).padStart(2,"0");
+    content.innerHTML=`
+      <div class="card">
+        <div class="info">
+          <div class="nm">⚔ РЕЙД: Призрак подземелья</div>
+          <div class="st">Слава: 💠 ${S.glory} | Бестиарий: ${S.bestiary} монстров (+${S.bestiary*2}% золота)</div>
+          <div class="st">Факелы: ${S.torches?("🔥".repeat(S.torches)):"—"} ${S.torches<3?("(+1 через "+mm+":"+ss+")"):"(полны)"}</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="info">
+          <div class="nm">${S.opp.n} ${"★".repeat(S.opp.t)}</div>
+          <div class="st">3 стража · 45 сек на всех. Победа: +50 Славы, грабёж, шанс украсть монстра.</div>
+        </div>
+        <button class="buy" data-fn="rollOpp">🎲</button>
+      </div>
+      <button id="prestigeBtn" ${(S.torches>0&&S.floor>=3&&!RAID.active)?"":"disabled"} data-fn="startRaid">
+        ${RAID.active?"⚔ БОЙ ИДЁТ…":(S.torches>0?"⚔ НАПАСТЬ (−1 🔥)":(S.floor<3?"⚔ Рейды с 3-го этажа":"🔥 Факелы кончились"))}
+      </button>
+      <div class="small" style="margin-top:6px">В рейде анти-столл не работает: слабый DPS — стражи стоят. Покупай героев и кулак!</div>`;
+  }
+  attachDelegated();
+  refreshHud();
+}
+function attachDelegated(){
+  content.querySelectorAll("button[data-fn]").forEach(b=>{
+    b.onclick=()=>{
+      const f=b.dataset.fn;
+      if(f==="buyTap"){
+        const c=tapCost();
+        if(S.gold>=c){ S.gold-=c; S.tapLvl++; tapFx(); sfxBuy(); haptic("impact","medium"); }
+      }
+      else if(f.startsWith("buyHero")){
+        const i=+f.slice(7), c=heroCost(i);
+        if(S.gold>=c){ S.gold-=c; S.heroLvl[i]++; heroFx(i); sfxBuy(); haptic("impact","medium"); }
+      }
+      else if(f.startsWith("buyTal_")){
+        const key=f.slice(7), nd=TALENTS[key].nodes[S.tQty[key]];
+        if(nd&&S.souls>=nd.c){ S.souls-=nd.c; S.tQty[key]++; addFloat(CW/2,CH*0.3,"👻 ТАЛАНТ ↑",true); sfxBuy(); haptic("notify","success"); }
+      }
+      else if(f==="rollOpp"){ rollOpp(); haptic("select"); }
+      else if(f==="startRaid"){ startRaid(); haptic("impact","heavy"); }
+      else if(f==="prestige"&&S.floor>=20){
+        const g=soulsGain();
+        if(confirm("Продать данж Кредо?\nПолучишь: "+g+" душ\nСброс: этажи, монеты, герои, кулак.")){
+          S.souls+=g; S.firstPrestige=true;
+          S.floor=1; S.runBest=1; S.gold=0; S.tapLvl=0;
+          S.heroLvl=[0,0,0,0,0]; S.pity=0; M.info=null;
+          spawnFloor(); sfxPrestige(); haptic("notify","success");
+          ded(`Кредо забрал данж и отсчитал ${g} душ. «Приятного бизнеса», — проскрипел он.`);
+          save(); refreshHud();
+        }
+      }
+      renderList(); refreshHud(); save();
+    };
+  });
+}
+/* ================= ОБУЧЕНИЕ основных функций ================= */
+const tutEl=document.getElementById("tut");
+const TUT=[
+ {nm:"Тап по монстру",      txt:"Тапай по монстру в проёме арки — каждый тап наносит урон. Начинай!",
+   chk:()=>S.tapsDone>=8},
+ {nm:"Контроша",            txt:"5 БЫСТРЫХ тапов подряд — 6-й бьёт ×3 (увидишь надпись «КОНТРОША!»). Собери ритм.",
+   chk:()=>S.tutFlags.kontra},
+ {nm:"Апгрейд кулака",      txt:"Открой вкладку ✊ КУЛАК и купи апгрейд (25 💰) — тап-урон ×1.65 за уровень.",
+   chk:()=>S.tapLvl>=1},
+ {nm:"Найм героя",          txt:"Вкладка 🛡 ГЕРОИ: найми Слизня Ржавого (50 💰) — герои бьют сами, каждую секунду.",
+   chk:()=>S.heroLvl.some(v=>v>0)},
+ {nm:"Волны и кульминация", txt:"На этаже 10 волн (пипсы над полосой HP). Волна 10 — кульминация: повергни её!",
+   chk:()=>S.tutFlags.climax},
+ {nm:"Босс и PITY",         txt:"Раз в 10 этажей — босс с таймером 30 сек. Не успел? Каждый фейл режет его HP на 10% навсегда — дожмёшь.",
+   chk:()=>S.tutFlags.boss},
+ {nm:"Рейд",                txt:"С 3-го этажа открыт ⚔ РЕЙД: 3 призрачных стража за 45 сек. Победа = Слава, грабёж, кража монстра.",
+   chk:()=>S.tutFlags.raid},
+ {nm:"Престиж",             txt:"С 20-го этажа открыт престиж: продай данж Кредо — получи души и древо талантов (они не сбрасываются).",
+   chk:()=>S.tutFlags.soulsInfo},
+];
+let tutPrev=null;
+function tutCheck(){
+  if(!tutEl) return;
+  const doneCount=TUT.filter(s=>s.chk()).length;
+  const idx=TUT.findIndex(s=>!s.chk());
+  if(idx<0){
+    if(!S.tutFlags.done){
+      S.tutFlags.done=true; S.gold+=100; refreshHud();
+      ded("🎓 Обучение пройдено! Премия за аттестацию: +100 💰. Бог в помощь — то есть я.");
+      sfxWin();
+    }
+    tutEl.style.display="none";
+    return;
+  }
+  if(tutPrev!==null && idx>tutPrev){
+    ded("🎓 Урок «"+TUT[idx-1].nm+"» пройден! Дальше: "+TUT[idx].nm+".");
+    sfxBuy();
+    tutEl.classList.remove("flash"); void tutEl.offsetWidth; tutEl.classList.add("flash");
+  }
+  tutPrev=idx;
+  tutEl.style.display="block";
+  tutEl.innerHTML="<b>🎓 ОБУЧЕНИЕ "+doneCount+"/"+TUT.length+": "+TUT[idx].nm+"</b><br>"+TUT[idx].txt;
+}
+setInterval(()=>{
+  if(S.floor>=20 && !S.tutFlags.soulsInfo){
+    S.tutFlags.soulsInfo=true;
+    ded("С 20-го этажа открыт ПРЕСТИЖ: вкладка 👻 ДУШИ — продажа данжа Кредо и древо талантов. Души не сбрасываются!");
+  }
+  tutCheck();
+  if(curTab==="raid") renderList(); // обновлять таймер факелов
+  content.querySelectorAll("button[data-fn]").forEach(b=>{
+    const f=b.dataset.fn;
+    if(f==="buyTap") b.disabled=S.gold<tapCost();
+    else if(f.startsWith("buyHero")) b.disabled=S.gold<heroCost(+f.slice(7));
+    else if(f.startsWith("buyTal_")){
+      const nd=TALENTS[f.slice(7)].nodes[S.tQty[f.slice(7)]];
+      b.disabled=!nd||S.souls<nd.c;
+    }
+    else if(f==="startRaid") b.disabled=RAID.active||S.torches<=0||S.floor<3;
+    if(!b.disabled&&b.classList.contains("buy")) b.classList.add("ready");
+    else b.classList.remove("ready");
+  });
+},400);
+
+/* ================= СТАРТ ================= */
+load();
+regenTorches();
+spawnFloor();
+muted=!!S.muted; syncMute();
+tgInit();
+if(TG){
+  /* в Telegram: облачный сейв может быть свежее локального */
+  tgRestore(function(){
+    muted = !!S.muted; syncMute();
+    regenTorches(); spawnFloor();
+    refreshHud(); renderList();
+    tgGreet();
+    tgCloudSave(true);
+  });
+} else {
+  tgGreet();
+}
+document.addEventListener("pointerdown",()=>audio(),true);
+cv.addEventListener("pointerdown",onTap,{passive:false});
+cv.addEventListener("contextmenu",e=>e.preventDefault());
+setInterval(save,5000);
+requestAnimationFrame(tick);
+renderList();
+</script>
+</body>
+</html>
