@@ -72,6 +72,7 @@
     <span id="floorLbl">Этаж 1</span>
     <span>💰 <b id="goldLbl">0</b></span>
     <span class="souls" id="soulsLbl">👻 0</span>
+    <span id="restartBtn" style="cursor:pointer" title="С начала этажа (пересдача)">↺</span>
     <span id="muteBtn" style="cursor:pointer" title="Звук">🔊</span>
   </div>
 
@@ -394,6 +395,15 @@ function sfxPrestige(){
 }
 function syncMute(){ muteBtnEl.textContent=muted?"🔇":"🔊"; }
 muteBtnEl.addEventListener("click",()=>{ muted=!muted; if(S)S.muted=muted; syncMute(); audio(); haptic("select"); });
+const restartBtnEl=document.getElementById("restartBtn");
+restartBtnEl.addEventListener("click",()=>{
+  audio();
+  if(RAID.active) return; // в рейде переигрывать нечего
+  S.wave=1; spawnWave();
+  sfxBuy(); haptic("select");
+  ded("С начала этажа! Копим силы, бьём с разгона.");
+  refreshHud(); renderList(); save();
+});
 
 /* ================= FX: вспышки уровней ================= */
 let flashT=0;
@@ -775,6 +785,19 @@ const SPRITES={
  "....wwww....",
  "....w..w....",
  "...w....w..."],
+ bones:[
+ "....wwww....",
+ "...wwwwww...",
+ "..wkkwwkkw..",
+ "..wwwwwwww..",
+ "....wwww....",
+ "....rrrr....",
+ "rr.wwwwww.rr",
+ "rr.wwkkww.rr",
+ "r..wkkkkw..r",
+ "...wwwwww...",
+ "..ww....ww..",
+ "..ww....ww.."],
 };
 const MONSET=[["slime","rat","bat"],["rat","bat","slime"],["bat","slime","rat"]];
 function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
@@ -870,7 +893,7 @@ function draw(now){
     drawRaidScene(now);
   } else if(M.info){
     const s=M.info.s||(M.info.kind==="boss"?4.2:M.info.kind==="elite"?3.4:3.0);
-    const sprite2=M.info.map?SPRITES[M.info.map]:(M.info.kind==="boss"?SPRITES.skull:SPRITES[MONSET[(S.floor>>2)%3][S.floor%3]]);
+    const sprite2=(M.info.map&&SPRITES[M.info.map])||(M.info.kind==="boss"?SPRITES.skull:SPRITES[MONSET[(S.floor>>2)%3][S.floor%3]]);
     const midX=CW/2, midY=CH*0.60;
     // тень под противником
     ctx.fillStyle="rgba(0,0,0,0.35)";
