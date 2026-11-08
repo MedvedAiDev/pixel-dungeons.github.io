@@ -170,6 +170,13 @@ function load(){
     hadLocalSave = !!raw;
     S = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
   }catch(e){ S = freshState(); }
+  /* ремонт сейва: битые/старые поля не должны убивать циклы */
+  if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
+  if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
+  if(!Array.isArray(S.heroLvl)) S.heroLvl=[0,0,0,0,0];
+  if(!S.tQty || typeof S.tQty!=="object") S.tQty={tap:0,leg:0,mar:0};
+  if(!S.opp || typeof S.opp!=="object") S.opp={n:"Рыцарь ЖЭК-3",t:1};
+  if(!Array.isArray(S.rateBuf)) S.rateBuf=[];
   // оффлайн-доход: 60% в час, макс 8 ч
   const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
   if(dt>30 && S.rate>0){
@@ -532,7 +539,14 @@ function rivalPts(id){
 function clanMax(wk){ return 90000 + wk*45000; }
 function clanBuff(chk){ return S.clan&&S.clan.id>=0&&CLANS[S.clan.id].b===chk ? 1 : 0; }
 function clanSim(){
-  S.clan.lastSim=S.clan.lastSim||Date.now();
+  /* до-ремонт клановых полей (сейвы из старых версий) */
+  const c=S.clan;
+  if(c.bossMax==null||c.bossMax<=0){ c.bossMax=clanMax(c.wk||weekIdx_w()); }
+  if(c.bossHp==null) c.bossHp=c.bossMax;
+  if(c.hitsToday==null) c.hitsToday=0;
+  if(c.day==null) c.day=dayIdx_w();
+  if(c.lastSim==null) c.lastSim=Date.now();
+  c.lastSim=c.lastSim||Date.now();
   const wk=weekIdx_w();
   if(S.clan.wk!==wk && S.clan.id>=0){
     if(S.clan.chest) giveClanChest(true); // лут не пропадает
@@ -645,7 +659,7 @@ function tick(now){
   }
   if(RAID.over && now>RAID.over.until) RAID.over=null;
   pruneRate();
-  draw(now);
+  try{ draw(now); }catch(err){ console.error(err); } // ошибка отрисовки не убивает цикл
   requestAnimationFrame(tick);
 }
 
@@ -1054,7 +1068,9 @@ function showNote(txt){
   noteEl.textContent=txt; noteEl.style.display="block";
   clearTimeout(noteT); noteT=setTimeout(()=>noteEl.style.display="none",4000);
 }
-setInterval(()=>{ if(performance.now()-S.lastQuip>90000){ S.lastQuip=performance.now(); ded(pick(S.clan&&S.clan.id>=0?DED_CLAN:DED_IDLE)); } },15000);
+setInterval(function(){ try{
+  if(performance.now()-S.lastQuip>90000){ S.lastQuip=performance.now(); ded(pick(S.clan&&S.clan.id>=0?DED_CLAN:DED_IDLE)); }
+}catch(err){ console.error(err); } },15000);
 
 /* ================= UI ================= */
 const $=id=>document.getElementById(id);
@@ -1281,30 +1297,46 @@ function tutCheck(){
   tutEl.innerHTML="<b>🎓 ОБУЧЕНИЕ "+doneCount+"/"+TUT.length+": "+TUT[idx].nm+"</b><br>"+TUT[idx].txt;
 }
 setInterval(()=>{
-  if(S.floor>=20 && !S.tutFlags.soulsInfo){
-    S.tutFlags.soulsInfo=true;
-    ded("С 20-го этажа открыт ПРЕСТИЖ: вкладка 👻 ДУШИ — продажа данжа Кредо и древо талантов. Души не сбрасываются!");
-  }
-  clanSim();
-  tutCheck();
-  if(curTab==="raid"||curTab==="clan") renderList(); // обновлять таймеры
-  content.querySelectorAll("button[data-fn]").forEach(b=>{
-    const f=b.dataset.fn;
-    if(f==="buyTap") b.disabled=S.gold<tapCost();
-    else if(f.startsWith("buyHero")) b.disabled=S.gold<heroCost(+f.slice(7));
-    else if(f.startsWith("buyTal_")){
-      const nd=TALENTS[f.slice(7)].nodes[S.tQty[f.slice(7)]];
-      b.disabled=!nd||S.souls<nd.c;
+  try{
+    if(S.floor>=20 && !S.tutFlags.soulsInfo){
+      S.tutFlags.soulsInfo=true;
+      ded("С 20-го этажа открыт ПРЕСТИЖ: вкладка 👻 ДУШИ — продажа данжа Кредо и древо талантов. Души не сбрасываются!");
     }
-    else if(f==="startRaid") b.disabled=RAID.active||S.torches<=0||S.floor<3;
-    else if(f==="clanHit") b.disabled=RAID.active||S.torches<=0||S.clan.id<0||S.clan.hitsToday>=3||S.clan.bossHp<=0||S.floor<3;
-    else if(f==="claimChest") b.disabled=!(S.clan.id>=0&&S.clan.chest);
-    if(!b.disabled&&b.classList.contains("buy")) b.classList.add("ready");
-    else b.classList.remove("ready");
-  });
+  }catch(err){ console.error(err); }
+  try{ clanSim(); }catch(err){ console.error(err); }
+  try{ tutCheck(); }catch(err){ console.error(err); }
+  try{
+    if(curTab==="raid"||curTab==="clan") renderList(); // обновлять таймеры
+    content.querySelectorAll("button[data-fn]").forEach(b=>{
+      const f=b.dataset.fn;
+      if(f==="buyTap") b.disabled=S.gold<tapCost();
+      else if(f.startsWith("buyHero")) b.disabled=S.gold<heroCost(+f.slice(7));
+      else if(f.startsWith("buyTal_")){
+        const nd=TALENTS[f.slice(7)].nodes[S.tQty[f.slice(7)]];
+        b.disabled=!nd||S.souls<nd.c;
+      }
+      else if(f==="startRaid") b.disabled=RAID.active||S.torches<=0||S.floor<3;
+      else if(f==="clanHit") b.disabled=RAID.active||S.torches<=0||S.clan.id<0||S.clan.hitsToday>=3||S.clan.bossHp<=0||S.floor<3;
+      else if(f==="claimChest") b.disabled=!(S.clan.id>=0&&S.clan.chest);
+      if(!b.disabled&&b.classList.contains("buy")) b.classList.add("ready");
+      else b.classList.remove("ready");
+    });
+  }catch(err){ console.error(err); }
 },400);
 
 /* ================= СТАРТ ================= */
+/* телеметрия: сбои на устройстве игрока видны прямо в игре */
+let _errT=0;
+window.addEventListener("error",function(e){
+  try{
+    const msg=String((e&&(e.message||(e.error&&e.error.message)))||e);
+    if(performance.now()-_errT>8000){
+      _errT=performance.now();
+      console.error(e);
+      if(typeof ded==="function") ded("🛠 СБОЙ: "+msg.slice(0,80)+" — сними это на экран, расскажу разработчику.");
+    }
+  }catch(_){}
+},true);
 load();
 regenTorches();
 spawnFloor();
@@ -1328,8 +1360,8 @@ if(TG){
 document.addEventListener("pointerdown",()=>audio(),true);
 cv.addEventListener("pointerdown",onTap,{passive:false});
 cv.addEventListener("contextmenu",e=>e.preventDefault());
-setInterval(clanSim,30000); // фантомные члены клана жуют босса сами
-setInterval(save,5000);
+setInterval(function(){ try{ clanSim(); }catch(err){ console.error(err); } },30000); // фантомные члены клана жуют босса сами
+setInterval(function(){ try{ save(); }catch(err){ console.error(err); } },5000);
 requestAnimationFrame(tick);
 renderList();
 </script>
