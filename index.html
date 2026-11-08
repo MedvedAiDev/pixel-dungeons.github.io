@@ -155,16 +155,18 @@ function freshState(){
     heroLvl:[0,0,0,0,0],
     tQty:{tap:0, leg:0, mar:0},
     pity:0, firstPrestige:false, tapsDone:0, wave:1, hintKontra:false, tutFlags:{},
-    lastQuip:0, lastSeen:Date.now(), rateBuf:[], rate:0,
+    lastQuip:0, lastSeen:0, rateBuf:[], rate:0,
     torches:3, glory:0, bestiary:0, lastTorchT:Date.now(),
     opp:{n:"Рыцарь ЖЭК-3",t:1}, muted:false,
     clan:{id:-1, wk:0, pts:0, contrib:0, bossHp:0, bossMax:0,
       chest:0, hitsToday:0, day:0, lastSim:0},
   };
 }
+let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
 function load(){
   try{
     const raw = localStorage.getItem(SAVE_KEY);
+    hadLocalSave = !!raw;
     S = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
   }catch(e){ S = freshState(); }
   // оффлайн-доход: 60% в час, макс 8 ч
@@ -188,6 +190,7 @@ const TG = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp 
 function tgLive(){ return !!(TG && TG.platform && TG.platform !== "unknown"); }
 let PLAYER_NAME = "наследник";
 let _tgCloudT = 0;
+let BOOT_OK=false; // разрешение на записи в облако (после сверки сейвов)
 function tgInit(){
   if(!TG) return;
   try{ TG.ready(); }catch(e){}
@@ -214,13 +217,27 @@ function haptic(kind, opt){
 }
 /* облачное сохранение: пишем локально всегда, в Telegram — ещё и в CloudStorage (не чаще 10 сек) */
 function tgCloudSave(force){
-  if(!tgLive() || !TG.CloudStorage) return;
+  if(!BOOT_OK || !tgLive() || !TG.CloudStorage) return;
   const now = Date.now();
   if(!force && now - _tgCloudT < 10000) return;
   _tgCloudT = now;
   try{ TG.CloudStorage.setItem(SAVE_KEY, JSON.stringify(S), function(){}); }catch(e){}
 }
 /* при старте в Telegram: если облачный сейв свежее локального — берём его */
+function adoptCloud(cloud){
+  /* правила нерушимости сейва:
+     1) локального сейва нет (новое устройство) — облако всегда авторитетно;
+     2) локальный есть — берём тот, что свежее по метке. */
+  if(hadLocalSave && (S.lastSeen||0) >= (cloud.lastSeen||0)) return false;
+  S = Object.assign(freshState(), cloud);
+  /* оффлайн-доход для облачного состояния */
+  const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
+  if(dt > 30 && S.rate > 0){
+    const g = Math.floor(S.rate*dt*0.6);
+    if(g > 0) S.gold += g;
+  }
+  return true;
+}
 function tgRestore(done){
   if(!tgLive() || !TG.CloudStorage){ done(); return; }
   try{
@@ -228,15 +245,7 @@ function tgRestore(done){
       try{
         if(!err && raw){
           const cloud = JSON.parse(raw);
-          if(cloud && (cloud.lastSeen || 0) > (S.lastSeen || 0)){
-            S = Object.assign(freshState(), cloud);
-            /* оффлайн-доход для облачного состояния */
-            const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
-            if(dt > 30 && S.rate > 0){
-              const g = Math.floor(S.rate*dt*0.6);
-              if(g > 0) S.gold += g;
-            }
-          }
+          if(cloud) adoptCloud(cloud);
         }
       }catch(e){}
       done();
@@ -1280,8 +1289,9 @@ muted=!!S.muted; syncMute();
 clanSim();
 tgInit();
 if(TG){
-  /* в Telegram: облачный сейв может быть свежее локального */
+  /* в Telegram: сперва миримилим облачный сейв и локальный, потом разрешаем записи в облако */
   tgRestore(function(){
+    BOOT_OK=true;
     muted = !!S.muted; syncMute();
     regenTorches(); spawnFloor();
     refreshHud(); renderList();
@@ -1289,6 +1299,7 @@ if(TG){
     tgCloudSave(true);
   });
 } else {
+  BOOT_OK=true;
   tgGreet();
 }
 document.addEventListener("pointerdown",()=>audio(),true);
