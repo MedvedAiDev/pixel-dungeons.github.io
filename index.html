@@ -99,11 +99,33 @@
 "use strict";
 /* ================= ДАННЫЕ ================= */
 const HEROES = [
-  { id:0, nm:"Слизень Ржавый",  base:1,   unlock:50 },
-  { id:1, nm:"Шут Помешанный",  base:5,   unlock:250 },
-  { id:2, nm:"Кузнец Долга",    base:22,  unlock:1200 },
-  { id:3, nm:"Огр Тупой",       base:74,  unlock:6000 },
-  { id:4, nm:"Девочка-Палач",   base:260, unlock:35000 },
+  { id:0,  nm:"Слизень Ржавый",      base:1,       unlock:50 },
+  { id:1,  nm:"Шут Помешанный",      base:5,       unlock:250 },
+  { id:2,  nm:"Кузнец Долга",        base:22,      unlock:1200 },
+  { id:3,  nm:"Огр Тупой",           base:74,      unlock:6000 },
+  { id:4,  nm:"Девочка-Палач",       base:260,     unlock:35000 },
+  { id:5,  nm:"Ведьма Болотная",     base:900,     unlock:180000 },
+  { id:6,  nm:"Святой Отшельник",    base:3100,    unlock:950000 },
+  { id:7,  nm:"Пингвин-Ассасин",     base:11000,   unlock:5000000 },
+  { id:8,  nm:"Дракончик Фитиль",    base:42000,   unlock:26000000 },
+  { id:9,  nm:"Личь Дед",            base:155000,  unlock:140000000 },
+  { id:10, nm:"Тёмный Управляющий",  base:620000,  unlock:780000000 },
+  { id:11, nm:"Бесконечный Мясник",  base:2500000, unlock:4500000000 },
+];
+/* Умения героев (v0-упрощения честно подписаны в карточках) */
+const HERO_SK=[
+ "25 ур: золото +10%",
+ "25 ур: раз в минуту тап ×1.5 на 10 сек",
+ "25 ур: ×2 по боссам (50 ур: ×3)",
+ "25 ур: крит 5%/×5 (50 ур: 10%)",
+ "25 ур: серии убийств (скоро в патче)",
+ "25 ур: яд всему этажу — 20% её DPS",
+ "25 ур: босс-таймер +5 сек",
+ "25 ур: крит +3% глобально (50 ур: +7%)",
+ "25 ур: ВЫДУХ раз/мин — 30 сек его DPS",
+ "50 ур: все герои +25% урона",
+ "25 ур: золото ×5",
+ "25 ур: каждый тап +1% тап-урона навсегда",
 ];
 const H_GROW=1.13, H_COST=1.085, T_GROW=1.65, T_COST=1.07;
 
@@ -130,6 +152,7 @@ const DED_IDLE = [
   "Герои бьют сами. А тап — это твоё искусство.",
   "Этаж 5. Жилец жалуется, что тапать больно. Пусть терпит. — Д.К.",
   "🏰 В башне открыли КЛАНЫ: бафф, общий босс, лига. Вступишь — занесу тебя в зачёт по-тихому.",
+  "🛡 В отряд приехали новички: Ведьма, Отшельник, Пингвин, Фитиль, Личь (я!), Управляющий и Мясник.",
 ];
 const DED_CLAN = [
   "Босс клана подыхает сам, пока ты спишь. Круши для солидарности.",
@@ -153,7 +176,8 @@ let S = null;
 function freshState(){
   return {
     gold:0, souls:0, floor:1, runBest:1, tapLvl:0,
-    heroLvl:[0,0,0,0,0],
+    heroLvl:[0,0,0,0,0,0,0,0,0,0,0,0],
+    tapStacks:0, breathT:0, clownT:0, clownB:0,
     tQty:{tap:0, leg:0, mar:0},
     pity:0, firstPrestige:false, tapsDone:0, wave:1, hintKontra:false, tutFlags:{},
     lastQuip:0, lastSeen:0, rateBuf:[], rate:0,
@@ -173,7 +197,8 @@ function load(){
   /* ремонт сейва: битые/старые поля не должны убивать циклы */
   if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
   if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
-  if(!Array.isArray(S.heroLvl)) S.heroLvl=[0,0,0,0,0];
+  if(!Array.isArray(S.heroLvl)) S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0];
+  while(S.heroLvl.length<HEROES.length) S.heroLvl.push(0); // старые сейвы (5 героев) дополняются
   if(!S.tQty || typeof S.tQty!=="object") S.tQty={tap:0,leg:0,mar:0};
   if(!S.opp || typeof S.opp!=="object") S.opp={n:"Рыцарь ЖЭК-3",t:1};
   if(!Array.isArray(S.rateBuf)) S.rateBuf=[];
@@ -238,6 +263,8 @@ function adoptCloud(cloud){
      2) локальный есть — берём тот, что свежее по метке. */
   if(hadLocalSave && (S.lastSeen||0) >= (cloud.lastSeen||0)) return false;
   S = Object.assign(freshState(), cloud);
+  if(!Array.isArray(S.heroLvl)) S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0];
+  while(S.heroLvl.length<HEROES.length) S.heroLvl.push(0); // мини-сейвы из старых версий дополняются
   /* оффлайн-доход для облачного состояния */
   const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
   if(dt > 30 && S.rate > 0){
@@ -319,24 +346,52 @@ function waveInfo(f,w){
 }
 function tapDmg(){
   let m=Math.pow(1.25,S.tQty.tap)*Math.pow(1.5,Math.max(0,S.tQty.tap-1))*(S.tQty.tap>=4?2:1);
+  if(clownOn()) m*=2;                           // «Клоунада»: тап ×2
+  m*=1+Math.min(9,(S.tapStacks||0)*0.01);       // Мясник: +1% за тап (кап ×10)
   return Math.pow(T_GROW,S.tapLvl)*m;
 }
 function heroDiscount(){ return S.tQty.leg>=3 ? 0.85 : 1; }
 function legMulti(){ return Math.pow(1.25,S.tQty.leg)*Math.pow(1.5,Math.max(0,S.tQty.leg-1))*(S.tQty.leg>=4?2:1); }
-function goldMulti(){ return Math.pow(1.25,S.tQty.mar)*Math.pow(1.5,Math.max(0,S.tQty.mar-1))*(S.tQty.mar>=4?2:1)*(1+(S.bestiary||0)*0.02)*(clanBuff("gold")?1.05:1); }
+function goldMulti(){
+  let g=Math.pow(1.25,S.tQty.mar)*Math.pow(1.5,Math.max(0,S.tQty.mar-1))*(S.tQty.mar>=4?2:1);
+  g*=(1+(S.bestiary||0)*0.02);
+  if(S.heroLvl&&S.heroLvl[0]>=25) g*=1.10;      // Слизень 25: +10% золота
+  if(S.heroLvl&&S.heroLvl[10]>=25) g*=5;        // Тёмный Управляющий 25: золото ×5
+  if(prUnion()) g*=1.5;                         // «Преступный Союз»
+  if(clanBuff("gold")) g*=1.05;
+  return g;
+}
 function heroDps(i){ return HEROES[i].base*Math.pow(H_GROW,Math.max(0,S.heroLvl[i]-1))*legMulti(); }
 function heroCost(i){ return HEROES[i].unlock*Math.pow(H_COST,S.heroLvl[i])*heroDiscount(); }
 function tapCost(){ return 25*Math.pow(T_COST,S.tapLvl); }
-function bloodSynergy(){ return S.heroLvl[0]>=25 && S.heroLvl[3]>=25; }
+function bloodSynergy(){ return S.heroLvl[0]>=25 && S.heroLvl[3]>=25; }              // «Кровопийцы»
+function clownOn(){ return S.heroLvl[1]>=50 && S.heroLvl[7]>=50; }                   // «Клоунада»
+function covenOn(){ return S.heroLvl[5]>=50 && S.heroLvl[9]>=50; }                   // «Ведьмин Ковен»
+function wallOn(){ return S.heroLvl[2]>=50 && S.heroLvl[6]>=50; }                    // «Святая Стена»
+function prUnion(){ return S.heroLvl[10]>=100 && S.heroLvl[11]>=100; }               // «Преступный Союз»
+function heroGlobalMulti(){ return 1+(S.heroLvl[9]>=50?(covenOn()?0.35:0.25):0); }   // Личь 50: все герои +25% (Ковен: +35%)
+function heroDpsG(i){ return heroDps(i)*heroGlobalMulti(); }
+function bossTime(){ return 30+(S.heroLvl[6]>=25?5:0)+(wallOn()?7:0); }              // Отшельник + Стена
+function critChance(){
+  let c=0;
+  if(S.heroLvl[3]>=50) c+=10; else if(S.heroLvl[3]>=25) c+=5;   // Огр
+  if(S.heroLvl[7]>=50) c+=7; else if(S.heroLvl[7]>=25) c+=3;    // Пингвин
+  if(clownOn()) c*=2;                                           // «Клоунада»: крит ×2
+  return Math.min(80,Math.round(c));
+}
 function totalDps(bossMode){
   let d=0;
+  const gm=heroGlobalMulti();
   for(let i=0;i<HEROES.length;i++){
     if(!S.heroLvl[i]) continue;
     let m=1;
-    if((i===0||i===3)&&bloodSynergy()) m*=2;
-    if(bossMode&&i===2&&S.heroLvl[2]>=25) m*=2;
+    if((i===0||i===3)&&bloodSynergy()) m*=2;                    // «Кровопийцы»
+    if(bossMode&&i===2&&S.heroLvl[2]>=25) m*=wallOn()?3:(S.heroLvl[2]>=50?3:2);  // Кузнец по боссам (+Стена)
+    m*=gm;                                                      // Личь: все герои
     d+=heroDps(i)*m;
   }
+  if(S.heroLvl[5]>=25) d+=heroDps(5)*(covenOn()?0.4:0.2);       // Ведьма: яд всему этажу
+  if(prUnion()) d*=1.25;                                        // «Преступный Союз»
   if(S.tQty.tap>=3) d+=tapDmg(); // автотап
   if(clanBuff("hero")) d*=1.05; // бафф клана
   return d;
@@ -414,13 +469,20 @@ restartBtnEl.addEventListener("click",()=>{
 
 /* ================= FX: вспышки уровней ================= */
 let flashT=0;
-const heroFlash=[0,0,0,0,0];
+const heroFlash=[0,0,0,0,0,0,0,0,0,0,0,0];
 const SQUAD=[
-  {i:0,map:"slime", x:0.10,s:2.2,ov:{g:"#3fb0a0",G:"#2b7a70"}},   // Слизень Ржавый
-  {i:1,map:"clown", x:0.26,s:2.4},                                // Шут Помешанный
-  {i:2,map:"kuznec",x:0.42,s:2.6},                                // Кузнец Долга
-  {i:3,map:"ogre",  x:0.60,s:3.0,ov:{g:"#7aa84f"}},               // Огр Тупой
-  {i:4,map:"girl",  x:0.76,s:2.5,ov:{p:"#5a2a6e"}},               // Девочка-Палач
+  {i:0, map:"slime",  x:0.042,s:2.2,ov:{g:"#3fb0a0",G:"#2b7a70"}},   // Слизень Ржавый
+  {i:1, map:"clown",  x:0.125,s:2.3},                                  // Шут Помешанный
+  {i:2, map:"kuznec", x:0.208,s:2.4},                                  // Кузнец Долга
+  {i:3, map:"ogre",   x:0.292,s:2.6,ov:{g:"#7aa84f"}},                 // Огр Тупой
+  {i:4, map:"girl",   x:0.375,s:2.3,ov:{p:"#5a2a6e"}},                 // Девочка-Палач
+  {i:5, map:"witch",  x:0.458,s:2.3},                                  // Ведьма Болотная
+  {i:6, map:"hermit", x:0.542,s:2.3},                                  // Святой Отшельник
+  {i:7, map:"pen",    x:0.625,s:2.2},                                  // Пингвин-Ассасин
+  {i:8, map:"dragon", x:0.708,s:2.0},                                  // Дракончик Фитиль
+  {i:9, map:"lich",   x:0.792,s:2.3},                                  // Личь Дед
+  {i:10,map:"mgr",    x:0.875,s:2.3},                                  // Тёмный Управляющий
+  {i:11,map:"butcher",x:0.958,s:2.4},                                  // Бесконечный Мясник
 ];
 function heroFx(i){
   heroFlash[i]=performance.now();
@@ -638,6 +700,23 @@ function tick(now){
   const dt=Math.min((now-lastFrame)/1000,0.25); lastFrame=now;
   regenTorches();
   flashT=Math.max(0,flashT-dt);
+  /* Шут 25: раз в минуту тап ×1.5 на 10 сек */
+  if(S.heroLvl[1]>=25){
+    S.clownT=(S.clownT||0)+dt;
+    if(S.clownT>=60){ S.clownT=0; S.clownB=now+10000; addFloat(CW/2,CH*0.5,"🤡 ШУТ: ТАП ×1.5!",true); }
+  }
+  /* Дракончик Фитиль 25: ВЫДУХ раз в минуту = 30 сек его DPS */
+  if(S.heroLvl[8]>=25 && !RAID.active && M.info){
+    S.breathT=(S.breathT||0)+dt;
+    if(S.breathT>=60){
+      S.breathT=0;
+      const burst=heroDpsG(8)*30;
+      M.hp-=burst;
+      addFloat(CW/2,CH*0.42,"🔥 ВЫДУХ! "+fmt(burst),true);
+      for(let i=0;i<26;i++) parts.push({x:CW/2+(Math.random()-0.5)*60,y:CH*0.5,vx:(Math.random()-0.5)*260,vy:-Math.random()*280,l:0.7,c:pick(["#e07b2a","#d84a3a","#ffd75e"])});
+      if(M.hp<=0){ M.hp=0; killReward(); }
+    }
+  }
   if(RAID.active){
     RAID.hp-=totalDps(false)*(clanBuff("raid")?1.15:1)*dt; // в рейде анти-столла нет — будет stakes
     if(RAID.hp<=0){ RAID.hp=0; killStrazh(now); }
@@ -647,7 +726,7 @@ function tick(now){
     dps=Math.max(dps,M.hp*0.005); // анти-столл: дед поможет киркой
     M.hp-=dps*dt;
     if(M.info.kind==="boss"){
-      const rem=Math.max(0,30-(now-M.tStart)/1000);
+      const rem=Math.max(0,bossTime()-(now-M.tStart)/1000);
       if(S.floor===10 && rem<=1 && M.hp>1) M.hp=1; // гарантия новичка
       if(rem<=0){ // провал: босс ждёт, HP «остывает»
         S.pity++;
@@ -677,12 +756,17 @@ function onTap(ev){
   if(streak>=5){ kontra=true; streak=0; showKontra(); }
   if(kontra){ mult=3; kontra=false; }
   if(mult>1) S.tutFlags.kontra=true;
-  const dmg=tapDmg()*mult;
+  if(S.heroLvl[1]>=25 && S.clownB && performance.now()<S.clownB) mult*=1.5; // Шут 25: тап ×1.5
+  if(S.heroLvl[11]>=25) S.tapStacks=(S.tapStacks||0)+1;                     // Мясник 25: +1% за тап
+  const cc=critChance();
+  const crit=cc>0&&Math.random()*100<cc;
+  const critM=clownOn()?10:5;                                              // Клоунада: крит ×2
+  const dmg=tapDmg()*mult*(crit?critM:1);
   if(RAID.active){
-    RAID.hp-=dmg; addFloat(x,y,fmt(dmg),mult>1); shake=Math.max(shake,0.1);
+    RAID.hp-=dmg; addFloat(x,y,(crit?"КРИТ ":"")+fmt(dmg),crit||mult>1); shake=Math.max(shake,0.1);
     if(RAID.hp<=0){ RAID.hp=0; killStrazh(now); }
   } else if(M.info){
-    M.hp-=dmg; addFloat(x,y,fmt(dmg),mult>1);
+    M.hp-=dmg; addFloat(x,y,(crit?"КРИТ ":"")+fmt(dmg),crit||mult>1);
     if(M.info.kind==="boss") shake=Math.max(shake,0.16);
     if(M.hp<=0){ M.hp=0; killReward(); }
   }
@@ -811,7 +895,98 @@ const SPRITES={
  "r..wkkkkw..r",
  "...wwwwww...",
  "..ww....ww..",
+  "..ww....ww.."],
+ witch:[
+ "....pppp....",
+ "...pppppp...",
+ "..pppppppp..",
+ "pppppppppppp",
+ "....gggg....",
+ "..gkkggkkg..",
+ "...gggggg...",
+ ".GGGGGGGGGG.",
+ ".GGGGGGGGGG.",
+ ".GGGGGGGGGG.",
+ "..GG....GG..",
+ "..kk....kk.."],
+ hermit:[
+ ".....yy.....",
+ "....yyyy....",
+ ".....yy.....",
+ "....wwww....",
+ "...wwwwww...",
+ "..wkkwwkkw..",
+ "...wwwwww...",
+ "..wwwwwwww..",
+ ".wwwwwwwwww.",
+ ".wwwwwwwwww.",
+ "..ww....ww..",
  "..ww....ww.."],
+ pen:[
+ "....kkkk....",
+ "...kkkkkk...",
+ "..kkkyykkk..",
+ "..kkkkkkkk..",
+ ".kkwwwwwwkk.",
+ ".kkwwwwwwkk.",
+ ".kkwwkkwwkk.",
+ ".kkwwwwwwkk.",
+ ".kkwwwwwwkk.",
+ "..kkwwwwkk..",
+ "...oo..oo...",
+ "............"],
+ dragon:[
+ "............",
+ "....rrrr....",
+ "...rrrrrr...",
+ "..rkrrrrkr..",
+ "..rrrrrrrr..",
+ ".oorrrrrroo.",
+ ".rrrrrrrrrr.",
+ "..rrrrrrrr..",
+ "..rr....ry..",
+ "..........yy",
+ "............",
+ "............"],
+ lich:[
+ "...yyyyyy...",
+ "...wwwwww...",
+ "..wkkwwkkw..",
+ "..wwwwwwww..",
+ "....wwww....",
+ "..pppppppp..",
+ ".pppppppppp.",
+ ".ppkppppkpp.",
+ ".pppppppppp.",
+ ".pppppppppp.",
+ "..pp....pp..",
+ "..kk....kk.."],
+ mgr:[
+ "....kkkk....",
+ "...wwwwww...",
+ "..wkkwwkkw..",
+ "....wwww....",
+ "..kkkrrkkk..",
+ "..wkkkkkkw..",
+ "..kkkkkkkk..",
+ ".bkkkkkkkk..",
+ ".bkkkkkkkk..",
+ "..kkkkkkkk..",
+ "..kk....kk..",
+ "..kk....kk.."],
+ butcher:[
+ "....wwww....",
+ "...wwwwww...",
+ "..wkkwwkkw..",
+ "....wwww....",
+ "..rrwwwwrr..",
+ ".wwwwrrwwwy.",
+ ".wwwrrrrwww.",
+ ".wwwwrrwwww.",
+ ".wwrrrrrrww.",
+ "..wwwwwwww..",
+ "..kk....kk..",
+ "..kk....kk.."],
 };
 const MONSET=[["slime","rat","bat"],["rat","bat","slime"],["bat","slime","rat"]];
 function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
@@ -996,7 +1171,7 @@ function drawWavePips(){
 /* Боссбар: широкая рамка, насечки, пульсирующий таймер (mini = без таймера) */
 function drawBossBar(now,mini){
   const w=CW*0.84, h=18, x=(CW-w)/2, y=CH*0.13;
-  const rem=Math.max(0,30-(now-M.tStart)/1000);
+  const rem=Math.max(0,bossTime()-(now-M.tStart)/1000);
   const hot=!mini&&rem<10, pulse=0.5+0.5*Math.sin(now/90);
   ctx.fillStyle="#0e0a1a"; ctx.fillRect(x-4,y-4,w+8,h+8);
   ctx.strokeStyle=hot?("rgba(216,74,58,"+(0.45+0.55*pulse).toFixed(2)+")"):(mini?"#d1861a":"#7a5c14");
@@ -1103,19 +1278,31 @@ function renderList(){
       </div>`;
   }
   if(curTab==="heroes"){
-    let h=`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. Связка «Кровопийцы»: Слизень 25 ур + Огр 25 ур → оба ×2 DPS.</div>`;
+    let h=`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. На 25 ур у героя открывается умение (у части — усиленное на 50).</div>`;
     HEROES.forEach(hr=>{
-      const l=S.heroLvl[hr.id], cost=heroCost(hr.id);
-      const dps=l?fmt(heroDps(hr.id)):0;
+      const l=S.heroLvl[hr.id], cost=heroCost(hr.id), dps=l?fmt(heroDps(hr.id)):0;
+      const bossTag=(hr.id===2&&l>=25)?((((wallOn())||l>=50)?" | ×3 по боссам":" | ×2 по боссам")):"";
+      const tags="";
+      const blood=(bloodSynergy()&&(hr.id===0||hr.id===3))?" | 🔗 КРОВОПИЙЦЫ!":"";
+      const lichPic=(hr.id===9&&l>=50)?(" | все герои +"+(covenOn()?35:25)+"%"):"";
+      const prU=(prUnion()&&(hr.id===10||hr.id===11))?" | 🤝 ПРЕСТУПНЫЙ СОЮЗ":"";
       h+=`<div class="card ${l?"owned":""}">
         <div class="info">
           <div class="nm">${hr.nm} <span class="small">${l?"ур."+l:"не нанят"}</span></div>
-          <div class="st">${l?("DPS: "+dps):("найм за "+fmt(hr.unlock)+" золота")}
-            ${hr.id===2&&l>=25?" | ×2 против боссов":""}
-            ${bloodSynergy()&&(hr.id===0||hr.id===3)?" | КРОВОПИЙЦЫ!":""}</div>
+          <div class="st">${l?("DPS: "+dps):("найм за "+fmt(hr.unlock)+" золота")}${bossTag}${blood}${lichPic}${prU}${tags}</div>
+          <div class="st small">${HERO_SK[hr.id]}</div>
         </div>
         ${buyBtn("💰 "+fmt(cost), S.gold>=cost, "buyHero"+hr.id)}
       </div>`;
+    });
+    h+=`<h3 class="sec">🔗 СВЯЗКИ</h3>`;
+    [{nm:"Кровопийцы", on:bloodSynergy(), req:"Слизень 25 ур + Огр 25 ур", gain:"оба ×2 DPS"},
+     {nm:"Клоунада", on:clownOn(), req:"Шут 50 ур + Пингвин 50 ур", gain:"тап ×2, крит ×2"},
+     {nm:"Ведьмин Ковен", on:covenOn(), req:"Ведьма 50 ур + Личь 50 ур", gain:"яд ×2, бафф Лича +35%"},
+     {nm:"Святая Стена", on:wallOn(), req:"Кузнец 50 ур + Отшельник 50 ур", gain:"босс-таймер +7 сек, Кузнец ×3"},
+     {nm:"Преступный Союз", on:prUnion(), req:"Управляющий 100 ур + Мясник 100 ур", gain:"золото ×1.5, DPS ×1.25"},
+    ].forEach(c=>{
+      h+=`<div class="tal ${c.on?"done":""}"><span><b>${c.on?"🔗":"🔒"} «${c.nm}»</b><br><span class="small">${c.req} → ${c.gain}</span></span></div>`;
     });
     content.innerHTML=h;
   }
@@ -1242,7 +1429,7 @@ function attachDelegated(){
         if(confirm("Продать данж Кредо?\nПолучишь: "+g+" душ\nСброс: этажи, монеты, герои, кулак.")){
           S.souls+=g; S.firstPrestige=true;
           S.floor=1; S.runBest=1; S.gold=0; S.tapLvl=0;
-          S.heroLvl=[0,0,0,0,0]; S.pity=0; M.info=null;
+          S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0]; S.clownB=0; S.breathT=0; S.pity=0; M.info=null;
           spawnFloor(); sfxPrestige(); haptic("notify","success");
           ded(`Кредо забрал данж и отсчитал ${g} душ. «Приятного бизнеса», — проскрипел он.`);
           save(); refreshHud();
@@ -1273,6 +1460,8 @@ const TUT=[
    chk:()=>S.clan&&S.clan.id>=0},
  {nm:"Престиж",             txt:"С 20-го этажа открыт престиж: продай данж Кредо — получи души и древо талантов (они не сбрасываются).",
    chk:()=>S.tutFlags.soulsInfo},
+ {nm:"Связки",              txt:"На 25-м ур героя открывается умение. Пары героев дают СВЯЗКИ — они в конце вкладки 🛡 ГЕРОИ. «Кровопийцы» ждут!",
+   chk:()=>S.heroLvl.some(v=>v>=25)},
 ];
 let tutPrev=null;
 function tutCheck(){
