@@ -613,7 +613,7 @@ function clanSim(){
   const wk=weekIdx_w();
   if(S.clan.wk!==wk && S.clan.id>=0){
     if(S.clan.chest) giveClanChest(true); // лут не пропадает
-    S.clan.wk=wk; S.clan.pts=0; S.clan.contrib=0; S.clan.chest=0;
+    S.clan.wk=wk; S.clan.pts=0; S.clan.contrib=0; S.clan.chest=0; S.clan.war=false;
     S.clan.bossMax=clanMax(wk); S.clan.bossHp=S.clan.bossMax;
     ded("🏰 Новая неделя «Башни Тысячи Этажей»! Зачёт обнулился, босс клана свежий — успей отыграть.");
   }
@@ -627,11 +627,23 @@ function clanSim(){
     S.clan.bossHp-=gDmg; S.clan.pts+=gDmg/500;
     if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; renderList(); }
   }
+  /* PvP: война за башню — соперник атакует твою башню пока идёт зачёт */
+  if(S.clan.id>=0 && S.clan.bossHp>0 && S.clan.wk===wk){
+    const war=CLANS[Math.floor(Math.random()*CLANS.length)];
+    const wDmg=Math.floor(totalDps(false)*2);
+    S.clan.war=true; // война объявлена/идёт
+    S.clan.bossHp=Math.max(0,S.clan.bossHp-wDmg);
+    if(S.clan.bossHp<=0){
+      S.clan.bossHp=0; S.clan.chest=0; S.clan.pts+=200; // выбыл из зачёта недели
+      ded("💥 «"+war.n+"» штурмом пробила твою башню! Ты выбыл из лиги на этой неделе.");
+      renderList();
+    }
+  }
 }
 function joinClan(id){
   S.clan.id=id; S.clan.wk=weekIdx_w(); S.clan.pts=0; S.clan.contrib=0;
   S.clan.bossMax=clanMax(S.clan.wk); S.clan.bossHp=S.clan.bossMax;
-  S.clan.chest=0; S.clan.hitsToday=0; S.clan.day=dayIdx_w(); S.clan.lastSim=Date.now();
+  S.clan.chest=0; S.clan.hitsToday=0; S.clan.day=dayIdx_w(); S.clan.lastSim=Date.now(); S.clan.war=false;
   S.tutFlags.clan=true;
   ded("«"+CLANS[id].n+"» принимает тебя, наследник! "+CLANS[id].motto);
   sfxBuy(); save(); renderList(); refreshHud();
@@ -1387,6 +1399,7 @@ function renderList(){
           <div class="st">HP: ${fmt(Math.ceil(c.bossHp))} / ${fmt(c.bossMax)} (${Math.round(bossFrac*100)}%)</div>
           <div style="height:8px;background:#3a2018;border:1px solid #0e0a1a;border-radius:4px;margin:4px 0;overflow:hidden"><div style="height:100%;background:#d84a3a;width:${(bossFrac*100).toFixed(1)}%"></div></div>
           <div class="st">«Бойцы-призраки» грызут его сами — дорубай штурмами!</div>
+          <div class="st">${S.clan.war?"⚔ ВОЙНА: соперник атакует твою башню…":"Башня под охраной (сейчас нет врагов)"}</div>
         </div>
         <button class="buy" ${(c.chest)?"":'disabled'} data-fn="claimChest">🎁 ЗАБРАТЬ ТРОФЕЙ КЛАНА</button>
         </div>
