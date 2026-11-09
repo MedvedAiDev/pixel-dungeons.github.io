@@ -1260,7 +1260,8 @@ let curTab="tap";
 document.querySelectorAll("#tabs button").forEach(b=>{
   b.onclick=()=>{ curTab=b.dataset.tab;
     document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x===b));
-    renderList(); };
+    try{ renderList(); }catch(err){ console.error(err); ded("🛠 Ошибка вкладки «"+b.dataset.tab+"»: "+String((err&&err.message)||err).slice(0,80)); };
+  };
 });
 const content=$("content");
 function buyBtn(txt,enabled,fn){
