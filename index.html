@@ -48,9 +48,15 @@
 
   #panel { flex:0 0 auto; height:38%; display:flex; flex-direction:column; background:#191430; border-top:2px solid #3b2f5e; }
   #tabs { display:flex; }
-  #tabs button { flex:1; background:#241d3f; border:none; border-bottom:2px solid #3b2f5e;
+  #tabs button { position:relative; flex:1; background:#241d3f; border:none; border-bottom:2px solid #3b2f5e;
     color:#9a92c0; font-family:inherit; font-size:13px; padding:9px 2px; cursor:pointer; }
   #tabs button.active { background:#2e2652; color:#ffd75e; font-weight:bold; }
+  /* 🔴 бейдж-индикатор: красная точка с числом (квесты готовы / новые достижения) */
+  .badge { position:absolute; top:-5px; right:-3px; min-width:16px; height:16px; line-height:16px;
+    padding:0 4px; border-radius:9px; background:#d84a3a; color:#fff; font-size:10px; font-weight:bold;
+    text-align:center; box-shadow:0 1px 2px rgba(0,0,0,.6); pointer-events:none; z-index:7; }
+  .badge.pop { animation:bpop .3s ease; }
+  @keyframes bpop { 0%{ transform:scale(.3); } 70%{ transform:scale(1.3); } 100%{ transform:scale(1); } }
   #content { flex:1; overflow-y:auto; padding:6px 8px 12px; }
 
   .card { display:flex; align-items:center; gap:8px; background:#211a3e; border:1px solid #352a5e;
@@ -87,7 +93,7 @@
   </div>
 
   <!-- книга достижений: кнопка справа, под HUD -->
-  <div id="achBtn" title="Книга достижений">🏆</div>
+  <div id="achBtn" title="Книга достижений">🏆<span id="abBadge" class="badge" style="display:none"></span></div>
 
   <div id="achBook" style="display:none; position:fixed; inset:0; z-index:60; background:rgba(10,7,18,0.88); padding:22px 10px;">
     <div style="max-width:480px; margin:0 auto; height:100%; background:#1a142e; border:2px solid #7a5c14; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 34px rgba(122,92,20,0.55);">
@@ -114,7 +120,7 @@
       <button data-tab="souls">👻 ДУШИ</button>
       <button data-tab="clan">🏰 КЛАН</button>
       <button data-tab="shop">💎 ЛАВКА</button>
-      <button data-tab="quests">📋 КВЕСТЫ</button>
+      <button data-tab="quests">📋 КВЕСТЫ<span id="qbBadge" class="badge" style="display:none"></span></button>
     </div>
     <div id="content"></div>
   </div>
@@ -207,7 +213,7 @@ function questProgress(type,val){
       if(q.type===type){ q.prog=Math.min(q.target,q.prog+val); if(q.prog>=q.target){ q.done=true; updated=true; } }
     });
   });
-  if(updated) save();
+  if(updated){ save(); refreshBadges(); }
 }
 function claimQuest(qIdx, weekly){
   const bag=weekly?S.wquests:S.quests;
@@ -221,27 +227,74 @@ function claimQuest(qIdx, weekly){
 
 /* ================= ДОСТИЖЕНИЯ (книга в HUD, бестиарий внутри) ================= */
 const ACHIEVEMENTS=[
-  {id:"first_tap",     nm:"Первый тап",     desc:"Тапни по монстру",              icon:"✊", reward:{souls:1}},
   {id:"first_hero",    nm:"Первый наём",    desc:"Найми любого героя",            icon:"🛡", reward:{souls:2}},
-  {id:"first_prestige",nm:"Первый престиж", desc:"Продай данж Кредо впервые",     icon:"👻", reward:{don:5}},
-  {id:"prestige_3",    nm:"Ветеран",        desc:"Сделай 3 престижа",             icon:"👻", reward:{souls:15,don:5}},
-  {id:"floor_50",      nm:"Покоритель 50",  desc:"Дойди до 50-го этажа",          icon:"🏰", reward:{souls:5}},
-  {id:"floor_100",     nm:"Покоритель 100", desc:"Дойди до 100-го этажа",         icon:"🏰", reward:{souls:10,don:1}},
-  {id:"floor_200",     nm:"Покоритель 200", desc:"Дойди до 200-го этажа",         icon:"🏰", reward:{souls:20,don:5}},
-  {id:"boss_slayer",   nm:"Убийца боссов",  desc:"Поверги 10 боссов",             icon:"☠", reward:{souls:5}},
   {id:"clan_join",     nm:"Свой в доску",   desc:"Вступи в любой клан",           icon:"🏰", reward:{gold:1000}},
   {id:"clan_boss",     nm:"Ревизор",        desc:"Убей босса клана штурмом",      icon:"👹", reward:{don:3}},
-  {id:"raid_win",      nm:"Рейдер",         desc:"Выиграй 5 рейдов",              icon:"⚔", reward:{gold:2000}},
-  {id:"tap_1000",      nm:"Быстрый палец",  desc:"Сделай 1000 тапов",             icon:"👆", reward:{souls:3}},
-  {id:"bestiary_3",    nm:"Охотник I",      desc:"Поймай 3 монстров в бестиарий", icon:"📚", reward:{souls:3}},
-  {id:"bestiary_10",   nm:"Охотник II",     desc:"Поймай 10 монстров в бестиарий",icon:"📚", reward:{souls:8,don:2}},
   {id:"shop_all",      nm:"Покупатель",     desc:"Купи все 3 усиления в ЛАВКЕ",   icon:"💎", reward:{souls:10}},
 ];
+/* 📶 Прогрессивные достижения: лестницы ступеней. S.prog[key] = сколько ступеней засчитано */
+const PROG={
+  tap:      {nm:"Палец-молот",     icon:"✊", unit:"тапов",
+             tiers:[ {n:1,nm:"1 тап",r:{souls:1}},{n:10,nm:"10 тапов",r:{souls:2}},{n:100,nm:"100 тапов",r:{souls:4}},
+                     {n:1000,nm:"1000 тапов",r:{souls:8,don:1}},{n:10000,nm:"10K тапов",r:{souls:15,don:2}},{n:100000,nm:"100K тапов",r:{souls:30,don:4}} ],
+             get:()=>S.tapsDone||0},
+  boss:     {nm:"Мясорубка",       icon:"☠", unit:"боссов",
+             tiers:[ {n:1,nm:"1 босс",r:{souls:1}},{n:10,nm:"10 боссов",r:{souls:4}},{n:50,nm:"50 боссов",r:{souls:10,don:1}},{n:200,nm:"200 боссов",r:{souls:25,don:3}} ],
+             get:()=>S.bossKills||0},
+  floor:    {nm:"Скалолаз",        icon:"🏰", unit:"этажей",
+             tiers:[ {n:10,nm:"10 этажей",r:{souls:2}},{n:25,nm:"25 этажей",r:{souls:3}},{n:50,nm:"50 этажей",r:{souls:5}},
+                     {n:100,nm:"100 этажей",r:{souls:10,don:1}},{n:200,nm:"200 этажей",r:{souls:20,don:5}},{n:500,nm:"500 этажей",r:{souls:50,don:10}} ],
+             get:()=>S.floorTop||0},
+  raid:     {nm:"Рейдер",          icon:"⚔", unit:"рейдов",
+             tiers:[ {n:1,nm:"1 победа",r:{gold:2000}},{n:5,nm:"5 побед",r:{souls:3}},{n:10,nm:"10 побед",r:{souls:6,don:1}},
+                     {n:25,nm:"25 побед",r:{souls:15,don:2}},{n:50,nm:"50 побед",r:{souls:30,don:4}} ],
+             get:()=>S.raidWins||0},
+  bestiary: {nm:"Охотник",         icon:"📚", unit:"монстров",
+             tiers:[ {n:3,nm:"3 монстра",r:{souls:3}},{n:10,nm:"10 монстров",r:{souls:8,don:2}},
+                     {n:25,nm:"25 монстров",r:{souls:15,don:3}},{n:60,nm:"60 монстров",r:{souls:30,don:5}} ],
+             get:()=>S.bestiary||0},
+  prestige: {nm:"Продавец данжей", icon:"👻", unit:"престижей",
+             tiers:[ {n:1,nm:"1 престиж",r:{don:5}},{n:3,nm:"3 престижа",r:{souls:15,don:5}},
+                     {n:5,nm:"5 престижей",r:{souls:30,don:8}},{n:10,nm:"10 престижей",r:{souls:60,don:15}} ],
+             get:()=>S.par||0},
+};
+function roman(n){ const R=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"]; return R[n-1]||String(n); }
+function progCount(){ let n=0; for(const k in (S.prog||{})) n+=S.prog[k]||0; return n; }
+function progTotal(){ let n=0; for(const k in PROG) n+=PROG[k].tiers.length; return n; }
+function progRewardTxt(reward){
+  const parts=[];
+  if(reward.souls) parts.push("+"+reward.souls+" 👻");
+  if(reward.don)   parts.push("+"+reward.don+" 💎");
+  if(reward.gold)  parts.push("+"+fmt(reward.gold)+" 💰");
+  return parts.join(" ");
+}
+/* Проверка лестниц (всех или одной): выдаёт заслуженные ступени. Вызывать после роста метрики */
+function checkProg(only){
+  let granted=false;
+  for(const key in PROG){
+    if(only && key!==only) continue;
+    const L=PROG[key];
+    let cur=Math.min((S.prog&&S.prog[key])||0, L.tiers.length);
+    while(cur<L.tiers.length && L.get()>=L.tiers[cur].n){
+      cur++;
+      const t=L.tiers[cur-1];
+      S.prog[key]=cur;
+      S.achNew=(S.achNew||0)+1; // 🔴 новая ступень — бейдж на книге
+      S.souls+=t.r.souls||0; S.don+=t.r.don||0; S.gold+=t.r.gold||0;
+      ded("🏆 "+L.icon+" "+L.nm+" "+roman(cur)+": "+t.nm+" — "+(progRewardTxt(t.r)||"молодец"));
+      try{ sfxWin(); }catch(e){}
+      granted=true;
+    }
+  }
+  if(granted){ save(); refreshHud(); try{ renderList(); }catch(e){} }
+  return granted;
+}
 function checkAchievement(id){
   if(!S.ach || S.ach[id]) return false;
   const a=ACHIEVEMENTS.find(x=>x.id===id);
   if(!a) return false;
   S.ach[id]=true;
+  S.achNew=(S.achNew||0)+1; // 🔴 непросмотренное достижение — бейдж на книге
   const r=a.reward||{};
   S.souls+=r.souls||0; S.don+=r.don||0; S.gold+=r.gold||0;
   const parts=[];
@@ -255,6 +308,30 @@ function checkAchievement(id){
   return true;
 }
 function achCount(){ let n=0; for(const k in S.ach) if(S.ach[k]) n++; return n; }
+
+/* ================= 🔴 БЕЙДЖИ-ИНДИКАТОРЫ ================= */
+/* Красные циферки: на КВЕСТЫ — готовые к забору квесты, на 🏆 — новые достижения */
+function claimableQuests(){
+  let n=0;
+  try{
+    S.quests.list.forEach((q,i)=>{ if(q.done&&!S.quests.claimed.includes(i)) n++; });
+    S.wquests.list.forEach((q,i)=>{ if(q.done&&!S.wquests.claimed.includes(i)) n++; });
+  }catch(err){}
+  return n;
+}
+function setBadge(id,n){
+  const el=document.getElementById(id); if(!el) return;
+  const txt=n>99?"99+":(n>0?String(n):"");
+  if(txt!==el.textContent){
+    if(n>0){ el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); } // пульс при изменении числа
+    el.textContent=txt;
+  }
+  el.style.display=n>0?"block":"none";
+}
+function refreshBadges(){
+  try{ setBadge("qbBadge",claimableQuests()); }catch(err){}
+  try{ setBadge("abBadge",S.achNew||0); }catch(err){}
+}
 
 const TALENTS = {
   tap: { nm:"🗡 Кликер",  nodes:[ {c:1,d:"Тап ×1.25"}, {c:2,d:"Тап ×1.5"}, {c:4,d:"Автотап 1/сек"}, {c:8,d:"Тап ×2"} ] },
@@ -317,7 +394,7 @@ function freshState(){
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
     wquests:{wk:0, list:[], claimed:[], genT:0}, // 📅 недельные квесты
-    ach:{}, raidWins:0, bossKills:0, // 🏆 достижения, счётчики рейд-побед и боссов
+    ach:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, // 🏆 достижения, лестницы и счётчики
   };
 }
 let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
@@ -355,6 +432,13 @@ function load(){
   if(typeof S.wquests.wk!=="number") S.wquests.wk=0;
   if(typeof S.wquests.genT!=="number") S.wquests.genT=0;
   if(!S.ach || typeof S.ach!=="object") S.ach={};
+  if(typeof S.achNew!=="number") S.achNew=0; // 🏆 новые достижения, ещё не просмотренные в книге
+  if(typeof S.floorTop!=="number") S.floorTop=0;
+  if(!S.prog || typeof S.prog!=="object") S.prog={tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0};
+  for(const k in PROG) if(typeof S.prog[k]!=="number") S.prog[k]=0;
+  // миграция старых статических ачивок в ступени лестниц (всё заработанное сохраняется)
+  const LEGACY_MAP={first_tap:["tap",1],tap_1000:["tap",4],boss_slayer:["boss",2],floor_50:["floor",3],floor_100:["floor",4],floor_200:["floor",5],raid_win:["raid",2],bestiary_3:["bestiary",1],bestiary_10:["bestiary",2],first_prestige:["prestige",1],prestige_3:["prestige",2]};
+  for(const id in LEGACY_MAP) if(S.ach && S.ach[id]){ const m=LEGACY_MAP[id]; if(S.prog[m[0]]<m[1]) S.prog[m[0]]=m[1]; }
   if(typeof S.raidWins!=="number") S.raidWins=0;
   if(typeof S.bossKills!=="number") S.bossKills=0;
   // оффлайн-башня: реальный автобой через этажи с кульминациями каждые 10 этажей (макс 8 ч)
@@ -364,6 +448,7 @@ function load(){
     if(res.gold>0){ S.gold+=res.gold; }
     if(res.souls>0){ S.souls+=res.souls; }
     S.runBest = Math.max(S.runBest, S.floor);
+  S.floorTop = Math.max(S.floorTop||0, S.floor); // 🏰 вечный рекорд для лестницы "Скалолаз"
     let msg=`Пока тебя не было (${Math.ceil(dt/60)} мин), я дробил башню за тебя.`;
     if(res.gold>0) msg+=` Добыто: ${fmt(res.gold)} 💰`;
     if(res.souls>0) msg+=` Душ: ${res.souls} 👻`;
@@ -725,7 +810,32 @@ function renderAchBook(){
     if(bookTab==="best"){
       h+=bookBestiary();
     } else {
-      h+="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+achCount()+" из "+ACHIEVEMENTS.length+"</div>";
+      h+="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+(achCount()+progCount())+" из "+(ACHIEVEMENTS.length+progTotal())+"</div>";
+      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:2px 0 4px;'>📶 ЛЕСТНИЦЫ · ступени растут вместе с тобой</div>";
+      for(const key in PROG){
+        const L=PROG[key];
+        const cur=Math.min((S.prog&&S.prog[key])||0, L.tiers.length);
+        const val=L.get()||0;
+        const next=cur<L.tiers.length?L.tiers[cur]:null;
+        const prevN=cur>0?L.tiers[cur-1].n:0;
+        const frac=next?Math.max(0,Math.min(1,(val-prevN)/Math.max(1,next.n-prevN))):1;
+        const pct=Math.round(frac*100);
+        const dots=L.tiers.map((t,i)=>"<span style='display:inline-block; width:8px; height:8px; margin:0 2px; border-radius:2px; background:"+(i<cur?"#ffd75e":"#2a2148")+";'></span>").join("");
+        h+="<div style='margin:6px 0; padding:8px; background:"+(next?"#15101e":"#20301f")+"; border:1px solid "+(next?"#352a5e":"#5f9e46")+"; border-radius:8px;'>"
+          +"<div style='display:flex; align-items:center;'>"
+          +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(cur>0?L.icon:"🔒")+"</div>"
+          +"<div style='flex:1 1 auto;'>"
+          +"<div style='font-weight:bold; color:"+(cur>0?"#ffd75e":"#9a92c0")+";'>"+L.nm+(cur>0?" "+roman(cur):"")+"</div>"
+          +"<div style='font-size:11px;'>"+dots+"</div>"
+          +"</div>"
+          +"<div style='font-size:11px; color:"+(next?"#7a7a8a":"#7fd17f")+"; white-space:nowrap;'>"+(next?(cur+"/"+L.tiers.length):"◎ МАКС")+"</div>"
+          +"</div>"
+          +"<div style='margin:4px 0 3px; height:8px; background:#0e0a1a; border:1px solid #352a5e; border-radius:4px; overflow:hidden;'>"
+          +"<div style='height:100%; width:"+pct+"%; background:"+(next?"#e0a330":"#5f9e46")+";'></div></div>"
+          +"<div style='font-size:11px; color:#9a92c0;'>"+(next?(fmt(val)+" / "+fmt(next.n)+" "+L.unit+" · «"+next.nm+"» даёт "+progRewardTxt(next.r)):"Все ступени взяты. Легенда БАШНИ!")+"</div>"
+          +"</div>";
+      }
+      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🎖 СОБЫТИЯ</div>";
       ACHIEVEMENTS.forEach(a=>{
         const done=!!(S.ach&&S.ach[a.id]);
         h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#20301f":"#15101e")+"; border:1px solid "+(done?"#5f9e46":"#352a5e")+"; border-radius:8px; display:flex; align-items:center;'>"
@@ -740,7 +850,8 @@ function renderAchBook(){
     achContentEl.innerHTML=h;
   }catch(err){ achContentEl.innerHTML="<div style='color:#d84a3a'>Ошибка рисования книги: "+err.message+"</div>"; }
 }
-achBtnEl.addEventListener("click",()=>{ audio(); achBookEl.style.display="block"; renderAchBook(); haptic("select"); });
+achBtnEl.addEventListener("click",()=>{ audio(); achBookEl.style.display="block"; if(S.achNew){ S.achNew=0; save(); refreshBadges(); } // 🔴 открыл книгу — бейдж погас
+  renderAchBook(); haptic("select"); });
 achCloseEl.addEventListener("click",()=>{ achBookEl.style.display="none"; haptic("select"); });
 achContentEl.addEventListener("click",e=>{
   const t=e.target.closest("[data-booktab]");
@@ -834,7 +945,7 @@ function killStrazh(now){
 }
 function winRaid(){
   S.raidWins++;
-  try{ questProgress("raid",1); if(S.raidWins>=5) checkAchievement("raid_win"); }catch(e){}
+  try{ questProgress("raid",1); checkProg("raid"); }catch(e){}
   if(RAID.kind==="clan" && S.clan.id>=0){
     const dmg=Math.floor(clanBossDmgHit()*2.5);
     S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
@@ -855,7 +966,7 @@ function winRaid(){
     S.bestiary++;
     S.bestiaryList.push({nm:RAID.opp.n,sub:"Пойман в рейде",t:Date.now()});
     if(S.bestiaryList.length>50) S.bestiaryList.shift();
-    try{ if(S.bestiary>=3) checkAchievement("bestiary_3"); if(S.bestiary>=10) checkAchievement("bestiary_10"); }catch(e){}
+    try{ checkProg("bestiary"); }catch(e){}
   }
   if(S.clan&&S.clan.id>=0){ S.clan.pts+=25; S.clan.contrib+=25; }
   addRate(loot);
@@ -971,6 +1082,7 @@ function spawnWave(){
   M.max  = M.info.kind==="boss" ? M.info.hp*Math.pow(0.9,S.pity) : M.info.hp;
   M.hp = M.max; M.tStart = performance.now();
   S.runBest = Math.max(S.runBest, S.floor);
+  S.floorTop = Math.max(S.floorTop||0, S.floor); // 🏰 вечный рекорд для лестницы "Скалолаз"
   if(S.wave===10){
     if(M.info.kind==="boss"){ ded(pick(DED_BOSS)); sfxBossIn(); }
     if(S.floor===3 && !S.hintKontra){ S.hintKontra=true; ded("5 быстрых тапов подряд — 6-й бьёт как три. Запомни: у меня память уже не та."); }
@@ -990,7 +1102,7 @@ function killReward(){
   S.pity=0;
   if(S.wave===10){ // кульминация этажа повержена
     S.tutFlags.climax=true;
-    if(kind==="boss"){ S.tutFlags.boss=true; S.bossKills++; try{ questProgress("boss",1); if(S.bossKills>=10) checkAchievement("boss_slayer"); }catch(e){} }
+    if(kind==="boss"){ S.tutFlags.boss=true; S.bossKills++; try{ questProgress("boss",1); checkProg("boss"); }catch(e){} }
     if(S.clan&&S.clan.id>=0&&S.clan.bossHp>0){ // вклад в босса клана
       const dmg=monsterBase(S.floor)*10*(kind==="boss"?2:1);
       S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
@@ -1003,9 +1115,7 @@ function killReward(){
     S.floor++; S.wave=1; spawnWave();
     try{
       questProgress("floor",1);
-      if(S.floor>=50) checkAchievement("floor_50");
-      if(S.floor>=100) checkAchievement("floor_100");
-      if(S.floor>=200) checkAchievement("floor_200");
+      checkProg("floor");
     }catch(e){}
   }
   refreshHud(); renderList();
@@ -1094,7 +1204,7 @@ function onTap(ev){
     if(M.hp<=0){ M.hp=0; killReward(); }
   }
   shake=Math.max(shake,0.12); S.tapsDone++;
-  try{ questProgress("tap",1); if(!S.ach.first_tap) checkAchievement("first_tap"); if(S.tapsDone>=1000) checkAchievement("tap_1000"); }catch(e){}
+  try{ questProgress("tap",1); checkProg("tap"); }catch(e){}
   for(let i=0;i<4;i++) parts.push({x,y,vx:(Math.random()-0.5)*140,vy:-Math.random()*160,l:0.5,c:"#ffd75e"});
   sfxTap(); if(mult>1) sfxKontra();
   haptic("impact", mult>1?"medium":"light");
@@ -1579,6 +1689,7 @@ function refreshHud(){
   $("goldLbl").textContent=fmt(S.gold);
   $("soulsLbl").textContent="👻 "+S.souls;
   $("donLbl").textContent="💎 "+S.don;
+  refreshBadges(); // 🔴 циферки: квесты готовы / новые достижения
 }
 let curTab="tap";
 document.querySelectorAll("#tabs button").forEach(b=>{
@@ -1883,8 +1994,7 @@ function attachDelegated(){
           S.floor=1; S.runBest=1; S.gold=0; S.tapLvl=0;
           S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0]; S.clownB=0; S.breathT=0; S.pity=0; M.info=null;
           spawnFloor(); sfxPrestige(); haptic("notify","success");
-          if(S.par===1) checkAchievement("first_prestige");
-          if(S.par>=3) checkAchievement("prestige_3");
+          checkProg("prestige");
           ded(`Кредо забрал данж и отсчитал ${g} душ. Парагон +1 (всего ${S.par}), кристаллов: ${S.don}. «Приятного бизнеса», — проскрипел он.`);
           save(); refreshHud();
         }
@@ -1983,6 +2093,7 @@ window.addEventListener("error",function(e){
   }catch(_){}
 },true);
 load();
+try{ checkProg(); }catch(err){ console.error(err); } // миграция старых ачивок + оффлайн-ступени
 regenTorches();
 spawnFloor();
 muted=!!S.muted; syncMute();
