@@ -1993,17 +1993,21 @@ function renderList(){
         ${claimed?"<button class=\"buy\" disabled>✔</button>":done?buyBtn("🎁 ЗАБРАТЬ",true,(weekly?"claimwQuest_":"claimQuest_")+i):"<button class=\"buy\" disabled>⏳ В процессе</button>"}
       </div>`;
     }
-    function qtabBtn(key,label,act,n){
-      return "<button data-qtab='"+key+"' style='flex:1 1 0; padding:8px 4px; font-weight:bold; font-size:12px; white-space:nowrap; cursor:pointer;"
+    function qtabBtn(key,label,act,n,ready){
+      return "<button data-qtab='"+key+"' style='position:relative; flex:1 1 0; padding:8px 4px; font-weight:bold; font-size:12px; white-space:nowrap; cursor:pointer;"
         +"color:"+(act?"#ffd75e":"#9a92c0")+"; background:"+(act?"#26203f":"#1d1830")+";"
         +"border:1px solid "+(act?"#7a5c14":"#352a5e")+"; border-radius:8px;'>"
-        +label+(n?(" "+n):"")+"</button>";
+        +label+(n?(" "+n):"")
+        +(ready>0?"<span class='badge'>"+(ready>99?"99+":ready)+"</span>":"")
+        +"</button>";
     }
     const dCnt=S.quests.list.filter(q=>q.done).length+" / "+(S.quests.list.length||3);
     const wCnt=S.wquests.list.filter(q=>q.done).length+" / "+(S.wquests.list.length||3);
+    const dReady=S.quests.list.filter((q,i)=>q.done&&!S.quests.claimed.includes(i)).length;  // 🔴 готовые к забору
+    const wReady=S.wquests.list.filter((q,i)=>q.done&&!S.wquests.claimed.includes(i)).length;
     let h="<div style='display:flex; gap:6px; margin-bottom:8px;'>"
-      +qtabBtn("daily","📋 ЕЖЕДНЕВНЫЕ",questTab==="daily",dCnt)
-      +qtabBtn("weekly","📅 ЕЖЕНЕДЕЛЬНЫЕ",questTab==="weekly",wCnt)
+      +qtabBtn("daily","📋 ЕЖЕДНЕВНЫЕ",questTab==="daily",dCnt,dReady)
+      +qtabBtn("weekly","📅 ЕЖЕНЕДЕЛЬНЫЕ",questTab==="weekly",wCnt,wReady)
       +"</div>";
     if(questTab==="weekly"){
       h+=`<div class="card"><div class="info">
