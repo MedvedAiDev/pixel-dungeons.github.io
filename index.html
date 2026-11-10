@@ -10,12 +10,21 @@
   html,body { height:100%; background:#14101d; color:#e8e0d0;
     font-family:"Courier New",monospace; user-select:none; -webkit-user-select:none;
     touch-action:manipulation; overflow:hidden; overscroll-behavior:none; }
-  #app { display:flex; flex-direction:column; height:100%; max-width:480px; margin:0 auto; }
+  #app { display:flex; flex-direction:column; height:100%; max-width:480px; margin:0 auto; position:relative; }
+
+  /* плавающая кнопка книги достижений: правый край под HUD */
+  #achBtn { position:absolute; top:40px; right:6px; z-index:30;
+    width:34px; height:34px; line-height:30px; text-align:center; font-size:17px;
+    background:#1d1830; border:2px solid #3b2f5e; border-radius:8px; cursor:pointer; }
+  #achBtn:active { background:#2a2347; }
 
   #hud { display:flex; justify-content:space-between; align-items:center;
     background:#1d1830; border-bottom:2px solid #3b2f5e; padding:6px 10px; font-size:14px; }
   #hud b { color:#ffd75e; }
-  #floorLbl { font-size:15px; font-weight:bold; color:#ff9f43; }
+  /* этаж/волна — плашка поверх игрового поля, слева под HUD */
+  #floorLbl { position:absolute; top:8px; left:8px; z-index:5; pointer-events:none;
+    background:rgba(20,14,40,.82); border:1px solid #3b2f5e; border-radius:6px;
+    padding:3px 8px; font-size:13px; font-weight:bold; color:#ff9f43; }
   .souls { color:#b98cff; }
 
   #stage { position:relative; flex:1 1 auto; min-height:0; }
@@ -70,14 +79,15 @@
 <body>
 <div id="app">
   <div id="hud">
-    <span id="floorLbl">Этаж 1</span>
     <span>💰 <b id="goldLbl">0</b></span>
     <span class="souls" id="soulsLbl">👻 0</span>
     <span class="donate" id="donLbl">💎 0</span>
     <span id="restartBtn" style="cursor:pointer" title="С начала этажа (пересдача)">↺</span>
     <span id="muteBtn" style="cursor:pointer" title="Звук">🔊</span>
-    <span id="achBtn" style="cursor:pointer" title="Книга достижений">🏆</span>
   </div>
+
+  <!-- книга достижений: кнопка справа, под HUD -->
+  <div id="achBtn" title="Книга достижений">🏆</div>
 
   <div id="achBook" style="display:none; position:fixed; inset:0; z-index:60; background:rgba(10,7,18,0.88); padding:22px 10px;">
     <div style="max-width:480px; margin:0 auto; height:100%; background:#1a142e; border:2px solid #7a5c14; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 34px rgba(122,92,20,0.55);">
@@ -91,6 +101,7 @@
 
   <div id="stage">
     <canvas id="cv"></canvas>
+    <div id="floorLbl">Этаж 1</div>
     <div id="ded"></div>
     <div id="note"></div>
     <div id="tut"></div>
@@ -101,10 +112,8 @@
       <button data-tab="tap" class="active">✊ КУЛАК</button>
       <button data-tab="heroes">🛡 ГЕРОИ</button>
       <button data-tab="souls">👻 ДУШИ</button>
-      <button data-tab="raid">⚔ РЕЙД</button>
       <button data-tab="clan">🏰 КЛАН</button>
       <button data-tab="shop">💎 ЛАВКА</button>
-      <button data-tab="bestiary">📚 БЕСТИАРИЙ</button>
       <button data-tab="quests">📋 КВЕСТЫ</button>
     </div>
     <div id="content"></div>
@@ -156,6 +165,15 @@ const QUEST_TYPES=[
   {nm:"Выиграй рейды", desc:"Побеждай в рейдах", type:"raid", target:2, reward:{souls:4,don:0,gold:700}},
   {nm:"Собери золота", desc:"Накопи N золота", type:"gold", target:10000, reward:{souls:2,don:0,gold:0}},
 ];
+/* недельные квесты: цели крупнее, награды жирнее — сброс раз в неделю */
+const QUEST_WEEK=[
+  {nm:"Мясная неделя",     desc:"Поверги 15 боссов",      type:"boss", target:15,    reward:{souls:12,don:2}},
+  {nm:"Палец-марафонец",   desc:"Сделай 500 тапов",       type:"tap",  target:500,   reward:{souls:8, don:1}},
+  {nm:"Лестничный марафон",desc:"Пройди 25 новых этажей", type:"floor",target:25,    reward:{souls:15,don:2}},
+  {nm:"Рейдовый волк",     desc:"Выиграй 10 рейдов",      type:"raid", target:10,    reward:{souls:10,don:2}},
+  {nm:"Золотая жила",      desc:"Собери 150 000 золота",  type:"gold", target:150000,reward:{souls:8, don:1}},
+  {nm:"Кулак тыквы",       desc:"Убей босса своего клана",type:"clan", target:1,     reward:{souls:10,don:3}},
+];
 function dayIdx_q(){ return Math.floor(Date.now()/864e5); }
 function genQuests(){
   const d=dayIdx_q();
@@ -168,22 +186,36 @@ function genQuests(){
   });
   S.quests.genT=Date.now(); save();
 }
+function genWeek(){
+  const wk=weekIdx_w();
+  if(S.wquests.wk===wk && S.wquests.list.length>=3) return;
+  S.wquests.wk=wk; S.wquests.list=[]; S.wquests.claimed=[];
+  shuffleIdx(QUEST_WEEK.length).slice(0,3).forEach(qIdx=>{
+    const q=QUEST_WEEK[qIdx];
+    S.wquests.list.push({id:qIdx, prog:0, done:false, reward:q.reward, type:q.type, nm:q.nm, desc:q.desc, target:q.target});
+  });
+  S.wquests.genT=Date.now(); save();
+}
 function shuffleIdx(n){ const a=[]; for(let i=0;i<n;i++) a.push(i); for(let i=n-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function questProgress(type,val){
   if(S.quests.day!==dayIdx_q()) genQuests();
+  genWeek();
   let updated=false;
-  S.quests.list.forEach(q=>{
-    if(q.done) return;
-    if(q.type===type){ q.prog=Math.min(q.target,q.prog+val); if(q.prog>=q.target){ q.done=true; updated=true; } }
+  ["quests","wquests"].forEach(k=>{
+    (S[k].list||[]).forEach(q=>{
+      if(q.done) return;
+      if(q.type===type){ q.prog=Math.min(q.target,q.prog+val); if(q.prog>=q.target){ q.done=true; updated=true; } }
+    });
   });
   if(updated) save();
 }
-function claimQuest(qIdx){
-  const q=S.quests.list[qIdx];
-  if(!q||!q.done||S.quests.claimed.includes(qIdx)) return;
-  S.quests.claimed.push(qIdx);
+function claimQuest(qIdx, weekly){
+  const bag=weekly?S.wquests:S.quests;
+  const q=bag.list[qIdx];
+  if(!q||!q.done||bag.claimed.includes(qIdx)) return;
+  bag.claimed.push(qIdx);
   S.souls+=q.reward.souls||0; S.don+=q.reward.don||0; S.gold+=q.reward.gold||0;
-  ded("Квест выполнен: «"+q.nm+"» — +" + (q.reward.souls||0) + " 👻, +" + (q.reward.gold||0) + " 💰" + (q.reward.don||0?(" +"+q.reward.don+" 💎"):""));
+  ded((weekly?"📅 Недельный":"📋 Дневной")+" квест: «"+q.nm+"» — +" + (q.reward.souls||0) + " 👻, +" + (q.reward.gold||0) + " 💰" + (q.reward.don||0?(" +"+q.reward.don+" 💎"):""));
   save(); renderList(); refreshHud();
 }
 
@@ -284,6 +316,7 @@ function freshState(){
       chest:0, hitsToday:0, day:0, lastSim:0},
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
+    wquests:{wk:0, list:[], claimed:[], genT:0}, // 📅 недельные квесты
     ach:{}, raidWins:0, bossKills:0, // 🏆 достижения, счётчики рейд-побед и боссов
   };
 }
@@ -316,6 +349,11 @@ function load(){
   if(!Array.isArray(S.quests.claimed)) S.quests.claimed=[];
   if(typeof S.quests.day!=="number") S.quests.day=0;
   if(typeof S.quests.genT!=="number") S.quests.genT=0;
+  if(!S.wquests || typeof S.wquests!=="object") S.wquests={wk:0,list:[],claimed:[],genT:0};
+  if(!Array.isArray(S.wquests.list)) S.wquests.list=[];
+  if(!Array.isArray(S.wquests.claimed)) S.wquests.claimed=[];
+  if(typeof S.wquests.wk!=="number") S.wquests.wk=0;
+  if(typeof S.wquests.genT!=="number") S.wquests.genT=0;
   if(!S.ach || typeof S.ach!=="object") S.ach={};
   if(typeof S.raidWins!=="number") S.raidWins=0;
   if(typeof S.bossKills!=="number") S.bossKills=0;
@@ -655,33 +693,59 @@ function achRewardTxt(r){
   if(r.gold) p.push("+"+fmt(r.gold)+" 💰");
   return p.join(" · ")||"—";
 }
+let bookTab="ach"; // вкладка книги: "ach" достижения / "best" бестиарий
+let questTab="daily"; // вкладка квестов: "daily" / "weekly"
+let warTab="raid"; // внутренняя вкладка КЛАНА: "raid" рейды / "clan" клан
+function bookTabBar(){
+  function bt(key,label,act){
+    return "<span data-booktab='"+key+"' style='flex:1 1 0; padding:7px 4px; text-align:center; cursor:pointer; font-weight:bold; font-size:12px; white-space:nowrap;"
+      +"color:"+(act?"#ffd75e":"#9a92c0")+"; background:"+(act?"#26203f":"#1d1830")+";"
+      +"border:1px solid "+(act?"#7a5c14":"#352a5e")+"; border-radius:6px;'>"+label+"</span>";
+  }
+  return "<div style='display:flex; gap:6px; margin-bottom:10px;'>"
+    +bt("ach","🏆 ДОСТИЖЕНИЯ",bookTab==="ach")
+    +bt("best","📚 БЕСТИАРИЙ "+((S.bestiaryList||[]).length||""),bookTab==="best")
+    +"</div>";
+}
+function bookBestiary(){
+  const bl=S.bestiaryList||[];
+  let h="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Поймано монстров: "+bl.length+(S.bestiary?(" · бонус к золоту +"+Math.round(S.bestiary*2)+"%"):"")+"</div>";
+  if(!bl.length) return h+"<div style='color:#7a7a8a; font-size:12px;'>Тут пусто. Иди в ⚔ РЕЙД: победа даёт шанс 25% изловить поверженного соперника.</div>";
+  bl.forEach(b=>{
+    h+="<div style='margin:4px 0; padding:6px 8px; background:#1d1830; border:1px solid #352a5e; border-radius:6px;'>"
+      +"<div style='font-weight:bold; font-size:13px;'>"+(b&&b.nm?b.nm:"??")+"</div>"
+      +"<div style='font-size:10px; color:#7a7a8a;'>"+(b&&b.sub?b.sub+" · ":"")+new Date(b&&b.t||Date.now()).toLocaleDateString()+"</div>"
+      +"</div>";
+  });
+  return h;
+}
 function renderAchBook(){
   try{
-    let h="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+achCount()+" из "+ACHIEVEMENTS.length+"</div>";
-    ACHIEVEMENTS.forEach(a=>{
-      const done=!!(S.ach&&S.ach[a.id]);
-      h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#20301f":"#15101e")+"; border:1px solid "+(done?"#5f9e46":"#352a5e")+"; border-radius:8px; display:flex; align-items:center;'>"
-        +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"🔒")+"</div>"
-        +"<div style='flex:1 1 auto;'>"
-        +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#9a92c0")+";'>"+a.nm+"</div>"
-        +(done?"<div style='font-size:11px; color:#7fd17f;'>Награда: "+achRewardTxt(a.reward||{})+"</div>"
-              :"<div style='font-size:11px; color:#7a7a8a;'>"+a.desc+"</div>")
-        +"</div></div>";
-    });
-    const bl=S.bestiaryList||[];
-    h+="<div style='margin:14px 0 6px; font-weight:bold; color:#ffd75e;'>📚 БЕСТИАРИЙ — поймано: "+bl.length+(S.bestiary?(" · бонус к золоту +"+Math.round(S.bestiary*2)+"%"):"")+"</div>";
-    if(!bl.length) h+="<div style='color:#7a7a8a; font-size:12px;'>Тут пусто. Рейды — шанс 25% изловить поверженного соперника.</div>";
-    bl.forEach(b=>{
-      h+="<div style='margin:4px 0; padding:6px 8px; background:#1d1830; border:1px solid #352a5e; border-radius:6px;'>"
-        +"<div style='font-weight:bold; font-size:13px;'>"+(b&&b.nm?b.nm:"??")+"</div>"
-        +"<div style='font-size:10px; color:#7a7a8a;'>"+(b&&b.sub?b.sub+" · ":"")+new Date(b&&b.t||Date.now()).toLocaleDateString()+"</div>"
-        +"</div>";
-    });
+    let h=bookTabBar();
+    if(bookTab==="best"){
+      h+=bookBestiary();
+    } else {
+      h+="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+achCount()+" из "+ACHIEVEMENTS.length+"</div>";
+      ACHIEVEMENTS.forEach(a=>{
+        const done=!!(S.ach&&S.ach[a.id]);
+        h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#20301f":"#15101e")+"; border:1px solid "+(done?"#5f9e46":"#352a5e")+"; border-radius:8px; display:flex; align-items:center;'>"
+          +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"🔒")+"</div>"
+          +"<div style='flex:1 1 auto;'>"
+          +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#9a92c0")+";'>"+a.nm+"</div>"
+          +(done?"<div style='font-size:11px; color:#7fd17f;'>Награда: "+achRewardTxt(a.reward||{})+"</div>"
+                :"<div style='font-size:11px; color:#7a7a8a;'>"+a.desc+"</div>")
+          +"</div></div>";
+      });
+    }
     achContentEl.innerHTML=h;
   }catch(err){ achContentEl.innerHTML="<div style='color:#d84a3a'>Ошибка рисования книги: "+err.message+"</div>"; }
 }
-achBtnEl.addEventListener("click",()=>{ audio(); renderAchBook(); achBookEl.style.display="block"; haptic("select"); });
+achBtnEl.addEventListener("click",()=>{ audio(); achBookEl.style.display="block"; renderAchBook(); haptic("select"); });
 achCloseEl.addEventListener("click",()=>{ achBookEl.style.display="none"; haptic("select"); });
+achContentEl.addEventListener("click",e=>{
+  const t=e.target.closest("[data-booktab]");
+  if(t){ bookTab=t.getAttribute("data-booktab"); renderAchBook(); haptic("select"); }
+});
 const restartBtnEl=document.getElementById("restartBtn");
 restartBtnEl.addEventListener("click",()=>{
   audio();
@@ -776,7 +840,7 @@ function winRaid(){
     S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
     const pts=Math.round(dmg/100); S.clan.pts+=pts; S.clan.contrib+=pts;
     S.glory+=10;
-    if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; }
+    if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; try{ questProgress("clan",1); }catch(e){} }
     else S.clan.pts+=25;
     RAID.active=false;
     RAID.over={win:true,clan:true,loot:pts,stolen:false,until:performance.now()+3200};
@@ -806,7 +870,7 @@ function loseRaid(){
     const dmg=Math.floor(clanBossDmgHit()*0.7); // раненый, но ранен
     S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
     const pts=Math.round(dmg/100); S.clan.pts+=pts; S.clan.contrib+=pts;
-    if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; }
+    if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; try{ questProgress("clan",1); }catch(e){} }
   }
   RAID.active=false;
   RAID.over={win:false,until:performance.now()+3000};
@@ -824,7 +888,9 @@ const CLANS=[
  {n:"Совхоз «Космические Слизни»", motto:"«Фасол поднимается, слизень всплывает»",        mem:22, b:"hero",  bTxt:"+5% ДПС героев всегда"},
 ];
 const LEAGUES=["Лига ЖЭК-3","Лига Профсоюза","Лига БАШНЯ","Лига «Башня Тысячи Этажей»"];
-function weekIdx_w(){ return Math.floor((Date.now()-Date.UTC(2026,0,1))/(7*864e5)); }
+const WEEK_EPOCH=Date.UTC(2026,0,5); // эталонный понедельник 00:00 UTC = ПН 03:00 мск
+function weekIdx_w(){ return Math.floor((Date.now()-WEEK_EPOCH)/(7*864e5)); }
+function weekRemain(){ return (weekIdx_w()+1)*7*864e5 + WEEK_EPOCH - Date.now(); } // мс до сброса недели
 function dayIdx_w(){ return Math.floor(Date.now()/864e5); }
 function clanLeague(pts){ return pts>=12000?3:pts>=5000?2:pts>=1500?1:0; }
 function rivalPts(id){
@@ -900,6 +966,8 @@ function giveClanChest(silent){
 let M = { info:null, hp:0, max:0, tStart:0 };
 function spawnWave(){
   M.info = waveInfo(S.floor, S.wave);
+  // 🛠 стоп-кран: у монстра всегда есть имя — «undefined» в плашке запрещён
+  if(!M.info.name) M.info.name = M.info.nm || (M.info.kind==="boss" ? "БОСС «Неизвестный»" : M.info.kind==="elite" ? "Элита этажа" : M.info.kind==="mini" ? "Мини-босс" : "Монстр БАШНИ");
   M.max  = M.info.kind==="boss" ? M.info.hp*Math.pow(0.9,S.pity) : M.info.hp;
   M.hp = M.max; M.tStart = performance.now();
   S.runBest = Math.max(S.runBest, S.floor);
@@ -927,7 +995,7 @@ function killReward(){
       const dmg=monsterBase(S.floor)*10*(kind==="boss"?2:1);
       S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
       const pts=Math.round(dmg/100); S.clan.pts+=4+pts; S.clan.contrib+=4+pts;
-      if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; }
+      if(S.clan.bossHp<=0){ S.clan.bossHp=0; S.clan.chest=1; S.clan.pts+=150; try{ questProgress("clan",1); }catch(e){} }
     }
   }
   if(S.wave<10){ S.wave++; spawnWave(); }
@@ -1355,7 +1423,7 @@ function draw(now){
       ctx.fillStyle=frac>0.5?"#4a9e3f":frac>0.2?"#e07b2a":"#d84a3a";
       ctx.fillRect(bx,by,bw*frac,bh);
       ctx.fillStyle="#e8e0d0"; ctx.font="bold 10px monospace"; ctx.textAlign="center";
-      ctx.fillText(M.info.name+"  "+fmt(M.hp)+" / "+fmt(M.max), CW/2, by+bh-3.5);
+      ctx.fillText((M.info.name||M.info.nm||"МОНСТР")+"  "+fmt(M.hp||0)+" / "+fmt(M.max||0), CW/2, by+bh-3.5);
     }
     drawWavePips();
   } else {
@@ -1438,7 +1506,7 @@ function drawBossBar(now,mini){
   ctx.fillStyle="#0e0a1a";
   for(let i=1;i<10;i++) ctx.fillRect(x+Math.round(w*i/10),y,1,h);
   ctx.fillStyle="#e8e0d0"; ctx.font="bold 10px monospace"; ctx.textAlign="center";
-  ctx.fillText("☠ "+M.info.name+(mini?" · "+(M.info.sub||"аттестация"):"")+"  "+fmt(M.hp)+" / "+fmt(M.max), CW/2, y+h-6);
+  ctx.fillText("☠ "+((M.info.name||M.info.nm)||"МОНСТР")+(mini?" · "+(M.info.sub||"аттестация"):"")+"  "+fmt(M.hp||0)+" / "+fmt(M.max||0), CW/2, y+h-6);
   if(!mini){
     const remTxt="⏱ "+rem.toFixed(1)+" сек"+(S.pity?"  (PITY −"+Math.round(S.pity*10)+"% HP)":"");
     ctx.fillStyle=hot?"#d84a3a":"#ffd75e"; ctx.font="bold 14px monospace";
@@ -1580,10 +1648,72 @@ function renderList(){
     }
     content.innerHTML=h;
   }
-  if(curTab==="raid"){
+  if(curTab==="clan"){ // ⚔ РЕЙДЫ + 🏰 КЛАН: единая военная вкладка с подвкладками
     const wait=Math.max(0,600000-(Date.now()-S.lastTorchT));
     const mm=Math.floor(wait/60000), ss=String(Math.floor(wait%60000/1000)).padStart(2,"0");
-    content.innerHTML=`
+    function wtabBtn(key,label,act){
+      return "<button data-wtab='"+key+"' style='flex:1 1 0; padding:8px 4px; font-weight:bold; font-size:12px; white-space:nowrap; cursor:pointer;"
+        +"color:"+(act?"#ffd75e":"#9a92c0")+"; background:"+(act?"#26203f":"#1d1830")+";"
+        +"border:1px solid "+(act?"#7a5c14":"#352a5e")+"; border-radius:8px;'>"+label+"</button>";
+    }
+    let h="<div style='display:flex; gap:6px; margin-bottom:8px;'>"
+      +wtabBtn("raid","⚔ РЕЙДЫ",warTab==="raid")
+      +wtabBtn("clan","🏰 КЛАН",warTab==="clan")
+      +"</div>";
+    if(warTab==="clan"){
+      const c=S.clan;
+      if(c.id<0){
+        h+=`
+        <div class="card"><div class="info">
+          <div class="nm">🏰 БАШНЯ ТЫСЯЧИ ЭТАЖЕЙ</div>
+          <div class="st">Еженедельный зачёт кланов: общий босс, лига, награды. Выбери клан — бай чай в чате.</div>
+        </div></div>
+        ${CLANS.map((cl,i)=>`
+        <div class="card">
+          <div class="info">
+            <div class="nm">${cl.n}</div>
+            <div class="st">${cl.motto}</div>
+            <div class="st">👤 ${cl.mem} бойцов · 🎁 ${cl.bTxt}</div>
+          </div>
+          <button class="buy" data-fn="joinClan_${i}">ВСТУПИТЬ</button>
+        </div>`).join("")}
+        <div class="small" style="margin-top:6px">Онлайн-кланы с друзьями придут вместе с сервером. Сейчас — кланы-призраки (живут по расписанию башни).</div>`;
+      } else {
+        const cl=CLANS[c.id];
+        const cwait=Math.max(0,450000-(Date.now()-S.lastTorchT));
+        const cmm=Math.floor(cwait/60000), css=String(Math.floor(cwait%60000/1000)).padStart(2,"0");
+        const bossFrac=c.bossMax?Math.max(0,c.bossHp/c.bossMax):1;
+        const rows=[{my:1,nm:cl.n,pt:Math.floor(c.pts)}];
+        for(let i=0;i<CLANS.length;i++) if(i!==c.id) rows.push({my:0,nm:CLANS[i].n,pt:rivalPts(i)});
+        rows.sort((a,b)=>b.pt-a.pt);
+        h+=`
+        <div class="card"><div class="info">
+          <div class="nm">🏰 ${cl.n}</div>
+          <div class="st">${cl.motto}</div>
+          <div class="st">Твой бафф: 🎁 ${cl.bTxt}</div>
+          <div class="st">Личный вклад за неделю: ${fmt(c.contrib)} очк.</div>
+        </div></div>
+        <div class="card"><div class="info">
+          <div class="nm">👹 БОСС КЛАНА · неделя ${c.wk+1}</div>
+          <div class="st">HP: ${fmt(Math.ceil(c.bossHp))} / ${fmt(c.bossMax)} (${Math.round(bossFrac*100)}%)</div>
+          <div style="height:8px;background:#3a2018;border:1px solid #0e0a1a;border-radius:4px;margin:4px 0;overflow:hidden"><div style="height:100%;background:#d84a3a;width:${(bossFrac*100).toFixed(1)}%"></div></div>
+          <div class="st">«Бойцы-призраки» грызут его сами — дорубай штурмами!</div>
+          <div class="st">${S.clan.war?"⚔ ВОЙНА: соперник атакует твою башню…":"Башня под охраной (сейчас нет врагов)"}</div>
+        </div>
+        <button class="buy" ${(c.chest)?"":'disabled'} data-fn="claimChest">🎁 ЗАБРАТЬ ТРОФЕЙ КЛАНА</button>
+        </div>
+        <button id="prestigeBtn" ${(S.torches>0&&S.floor>=3&&c.hitsToday<3&&!RAID.active&&c.bossHp>0)?"":"disabled"} data-fn="clanHit">
+          ${(c.hitsToday>=3)?"⚔ ШТУРМЫ НА СЕГОДНЯ ИСЧЕРПАНЫ (3/3)":(c.bossHp<=0?"👹 БОСС УЖЕ ДОБИТ — ЖДИ НОВОЙ НЕДЕЛИ":(S.torches>0?"⚔ ШТУРМ БОССА (−1 🔥) · "+c.hitsToday+"/3 в день":(S.floor<3?"с 3-го этажа":"🔥 Факелы кончились (+1 через "+cmm+":"+css+")")))}
+        </button>
+        <div class="card"><div class="info">
+          <div class="nm">🏆 ${LEAGUES[clanLeague(c.pts)]}</div>
+        </div>
+        ${rows.map((r,i)=>`<div class="tal ${r.my?'done':''}"><span>${i+1}. ${r.nm} — ${fmt(r.pt)}</span>${r.my?"<b style='color:#ffd75e'>ТЫ</b>":""}</div>`).join("")}
+        </div>
+        <div class="small" style="margin-top:6px">Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты).</div>`;
+      }
+    } else {
+      h+=`
       <div class="card">
         <div class="info">
           <div class="nm">⚔ РЕЙД: Призрак подземелья</div>
@@ -1602,61 +1732,11 @@ function renderList(){
         ${RAID.active?"⚔ БОЙ ИДЁТ…":(S.torches>0?"⚔ НАПАСТЬ (−1 🔥)":(S.floor<3?"⚔ Рейды с 3-го этажа":"🔥 Факелы кончились"))}
       </button>
       <div class="small" style="margin-top:6px">В рейде анти-столл не работает: слабый DPS — стражи стоят. Покупай героев и кулак!</div>`;
-  }
-  if(curTab==="clan"){
-    const c=S.clan;
-    if(c.id<0){
-      content.innerHTML=`
-        <div class="card"><div class="info">
-          <div class="nm">🏰 БАШНЯ ТЫСЯЧИ ЭТАЖЕЙ</div>
-          <div class="st">Еженедельный зачёт кланов: общий босс, лига, награды. Выбери клан — бай чай в чате.</div>
-        </div></div>
-        ${CLANS.map((cl,i)=>`
-        <div class="card">
-          <div class="info">
-            <div class="nm">${cl.n}</div>
-            <div class="st">${cl.motto}</div>
-            <div class="st">👤 ${cl.mem} бойцов · 🎁 ${cl.bTxt}</div>
-          </div>
-          <button class="buy" data-fn="joinClan_${i}">ВСТУПИТЬ</button>
-        </div>`).join("")}
-        <div class="small" style="margin-top:6px">Онлайн-кланы с друзьями придут вместе с сервером. Сейчас — кланы-призраки (живут по расписанию башни).</div>`;
-    } else {
-      const cl=CLANS[c.id];
-      const wait=Math.max(0,450000-(Date.now()-S.lastTorchT));
-      const mm=Math.floor(wait/60000), ss=String(Math.floor(wait%60000/1000)).padStart(2,"0");
-      const bossFrac=c.bossMax?Math.max(0,c.bossHp/c.bossMax):1;
-      // лига: твой клан + 5 соперников
-      const rows=[{my:1,nm:cl.n,pt:Math.floor(c.pts)}];
-      for(let i=0;i<CLANS.length;i++) if(i!==c.id) rows.push({my:0,nm:CLANS[i].n,pt:rivalPts(i)});
-      rows.sort((a,b)=>b.pt-a.pt);
-      const myRank=rows.findIndex(r=>r.my)+1;
-      content.innerHTML=`
-        <div class="card"><div class="info">
-          <div class="nm">🏰 ${cl.n}</div>
-          <div class="st">${cl.motto}</div>
-          <div class="st">Твой бафф: 🎁 ${cl.bTxt}</div>
-          <div class="st">Слава: 💠 ${S.glory} | Личный вклад за неделю: ${fmt(c.contrib)} очк.</div>
-        </div></div>
-        <div class="card"><div class="info">
-          <div class="nm">👹 БОСС КЛАНА · неделя ${c.wk+1}</div>
-          <div class="st">HP: ${fmt(Math.ceil(c.bossHp))} / ${fmt(c.bossMax)} (${Math.round(bossFrac*100)}%)</div>
-          <div style="height:8px;background:#3a2018;border:1px solid #0e0a1a;border-radius:4px;margin:4px 0;overflow:hidden"><div style="height:100%;background:#d84a3a;width:${(bossFrac*100).toFixed(1)}%"></div></div>
-          <div class="st">«Бойцы-призраки» грызут его сами — дорубай штурмами!</div>
-          <div class="st">${S.clan.war?"⚔ ВОЙНА: соперник атакует твою башню…":"Башня под охраной (сейчас нет врагов)"}</div>
-        </div>
-        <button class="buy" ${(c.chest)?"":'disabled'} data-fn="claimChest">🎁 ЗАБРАТЬ ТРОФЕЙ КЛАНА</button>
-        </div>
-        <button id="prestigeBtn" ${(S.torches>0&&S.floor>=3&&c.hitsToday<3&&!RAID.active&&c.bossHp>0)?"":"disabled"} data-fn="clanHit">
-          ${(c.hitsToday>=3)?"⚔ ШТУРМЫ НА СЕГОДНЯ ИСЧЕРПАНЫ (3/3)":(c.bossHp<=0?"👹 БОСС УЖЕ ДОБИТ — ЖДИ НОВОЙ НЕДЕЛИ":(S.torches>0?"⚔ ШТУРМ БОССА (−1 🔥) · "+c.hitsToday+"/3 в день":(S.floor<3?"с 3-го этажа":"🔥 Факелы кончились (+1 через "+mm+":"+ss+")")))}
-        </button>
-        <div class="card"><div class="info">
-          <div class="nm">🏆 ${LEAGUES[clanLeague(c.pts)]}</div>
-        </div>
-        ${rows.map((r,i)=>`<div class="tal ${r.my?'done':''}"><span>${i+1}. ${r.nm} — ${fmt(r.pt)}</span>${r.my?"<b style='color:#ffd75e'>ТЫ</b>":""}</div>`).join("")}
-        </div>
-        <div class="small" style="margin-top:6px">Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты).</div>`;
     }
+    content.innerHTML=h;
+    content.querySelectorAll("[data-wtab]").forEach(el=>{
+      el.onclick=()=>{ warTab=el.getAttribute("data-wtab"); haptic("select"); renderList(); };
+    });
   }
   if(curTab==="shop"){
     const shopCost={tap:30,dps:75,boss:150};
@@ -1713,24 +1793,56 @@ function renderList(){
     content.innerHTML=h;
   }
   if(curTab==="quests"){
-    genQuests();
-    let h=`<div class="card"><div class="info">
-      <div class="nm">📋 КВЕСТЫ НА СЕГОДНЯ</div>
-      <div class="st small">Обновляются каждые 24 часа. Выполняй и забирай награду.</div>
-    </div></div>`;
-    S.quests.list.forEach((q,i)=>{
-      const claimed=S.quests.claimed.includes(i);
+    genQuests(); genWeek();
+    const fmtT=ms=>{ const h=Math.max(0,Math.floor(ms/36e5)), m=Math.max(0,Math.floor((ms%36e5)/60e3)); return h>=24 ? (Math.floor(h/24)+" д "+(h%24)+" ч") : (h>0 ? (h+" ч "+m+" м") : (m+" м")); };
+    const remD=864e5-(Date.now()%864e5);
+    const remW=weekRemain();
+    function questCard(q,i,weekly){
+      const bag=weekly?S.wquests:S.quests;
+      const claimed=bag.claimed.includes(i);
       const done=q.done&&!claimed;
-      h+=`<div class="card ${claimed?'owned':''}">
+      const pct=(!q.target||isNaN(q.prog)) ? 0 : Math.min(100,Math.round(q.prog/q.target*100));
+      return `<div class="card ${claimed?'owned':''}">
         <div class="info">
           <div class="nm">${q.nm}</div>
-          <div class="st">${q.desc} — ${q.prog}/${q.target}</div>
-          <div class="st">👻 ${q.reward.souls||0}  💰 ${q.reward.gold||0}${q.reward.don||0?(" 💎 "+q.reward.don):""}</div>
+          <div class="st small">${q.desc}</div>
+          <div style="margin:4px 0 3px; height:8px; background:#15101e; border:1px solid #352a5e; border-radius:4px; overflow:hidden;">
+            <div style="height:100%; width:${pct}%; background:${pct>=100?"#5f9e46":"#e0a330"};"></div>
+          </div>
+          <div class="st">✅ ${fmt(q.prog)} / ${fmt(q.target)}   ·   👻 ${q.reward.souls||0}${q.reward.gold?("   💰 "+fmt(q.reward.gold)):""}${q.reward.don?("   💎 "+q.reward.don):""}</div>
         </div>
-        ${claimed?"<button class=\"buy\" disabled>✔</button>":done?buyBtn("🎁 ЗАБРАТЬ",true,"claimQuest_"+i):"<button class=\"buy\" disabled>⏳ В процессе</button>"}
+        ${claimed?"<button class=\"buy\" disabled>✔</button>":done?buyBtn("🎁 ЗАБРАТЬ",true,(weekly?"claimwQuest_":"claimQuest_")+i):"<button class=\"buy\" disabled>⏳ В процессе</button>"}
       </div>`;
-    });
+    }
+    function qtabBtn(key,label,act,n){
+      return "<button data-qtab='"+key+"' style='flex:1 1 0; padding:8px 4px; font-weight:bold; font-size:12px; white-space:nowrap; cursor:pointer;"
+        +"color:"+(act?"#ffd75e":"#9a92c0")+"; background:"+(act?"#26203f":"#1d1830")+";"
+        +"border:1px solid "+(act?"#7a5c14":"#352a5e")+"; border-radius:8px;'>"
+        +label+(n?(" "+n):"")+"</button>";
+    }
+    const dCnt=S.quests.list.filter(q=>q.done).length+" / "+(S.quests.list.length||3);
+    const wCnt=S.wquests.list.filter(q=>q.done).length+" / "+(S.wquests.list.length||3);
+    let h="<div style='display:flex; gap:6px; margin-bottom:8px;'>"
+      +qtabBtn("daily","📋 ЕЖЕДНЕВНЫЕ",questTab==="daily",dCnt)
+      +qtabBtn("weekly","📅 ЕЖЕНЕДЕЛЬНЫЕ",questTab==="weekly",wCnt)
+      +"</div>";
+    if(questTab==="weekly"){
+      h+=`<div class="card"><div class="info">
+        <div class="nm">📅 ЕЖЕНЕДЕЛЬНЫЕ · сброс в ПН 03:00 мск</div>
+        <div class="st small">Осталось ${fmtT(remW)}. Крупные цели — крупный куш, много 💎. Не проворонь неделю!</div>
+      </div></div>`;
+      S.wquests.list.forEach((q,i)=>{ h+=questCard(q,i,true); });
+    } else {
+      h+=`<div class="card"><div class="info">
+        <div class="nm">📋 ЕЖЕДНЕВНЫЕ · сброс через ${fmtT(remD)}</div>
+        <div class="st small">Три дела на день. Выполнил — забирай награду.</div>
+      </div></div>`;
+      S.quests.list.forEach((q,i)=>{ h+=questCard(q,i,false); });
+    }
     content.innerHTML=h;
+    content.querySelectorAll("[data-qtab]").forEach(el=>{
+      el.onclick=()=>{ questTab=el.getAttribute("data-qtab"); haptic("select"); renderList(); };
+    });
   }
   attachDelegated();
   refreshHud();
@@ -1758,10 +1870,11 @@ function attachDelegated(){
       }
       else if(f==="rollOpp"){ rollOpp(); haptic("select"); }
       else if(f==="startRaid"){ startRaid(); haptic("impact","heavy"); }
-      else if(f.startsWith("joinClan_")){ joinClan(+f.slice(9)); haptic("notify","success"); }
+      else if(f.startsWith("joinClan_")){ joinClan(+f.slice(9)); warTab="clan"; haptic("notify","success"); }
       else if(f==="clanHit"){ startRaid("clan"); haptic("impact","heavy"); }
       else if(f==="claimChest"&&S.clan.id>=0&&S.clan.chest){ giveClanChest(false); }
-      else if(f.startsWith("claimQuest_")){ claimQuest(+f.slice(11)); }
+      else if(f.startsWith("claimQuest_")){ claimQuest(+f.slice(11), false); }
+      else if(f.startsWith("claimwQuest_")){ claimQuest(+f.slice(12), true); }
       else if(f==="prestige"&&S.floor>=20){
         const g=soulsGain();
         if(confirm("Продать данж Кредо?\nПолучишь: "+g+" душ\n+1 парагон и +10 кристаллов\nСброс: этажи, монеты, герои, кулак.")){
@@ -1795,11 +1908,11 @@ const TUT=[
    chk:()=>S.tutFlags.climax},
  {nm:"Босс и PITY",         txt:"Раз в 10 этажей — босс с таймером 30 сек. Не успел? Каждый фейл режет его HP на 10% навсегда — дожмёшь.",
    chk:()=>S.tutFlags.boss},
- {nm:"Рейд",                txt:"С 3-го этажа открыт ⚔ РЕЙД: 3 призрачных стража за 45 сек. Победа = Слава, грабёж, кража монстра.",
+ {nm:"Рейд",                txt:"С 3-го этажа открыт РЕЙД — во вкладке 🏰 КЛАН, подвкладка ⚔ РЕЙДЫ: 3 призрачных стража за 45 сек. Победа = Слава, грабёж, кража монстра.",
    chk:()=>S.tutFlags.raid},
  {nm:"Клан",                txt:"Вкладка 🏰 КЛАН: вступи в один из шести кланов-призраков. Это бафф, еженедельный босс и лига «Башня Тысячи Этажей».",
    chk:()=>S.clan&&S.clan.id>=0},
-  {nm:"Бестиарий",           txt:"Побеждай стражей в рейдах — шанс поймать монстра в Бестиарий. Чем больше монстров, тем выше бонус к золоту.",
+  {nm:"Бестиарий",           txt:"Побеждай стражей в рейдах — шанс поймать монстра. Книга 🏆 справа под HUD: вкладка 📚 БЕСТИАРИЙ. Чем больше монстров, тем выше бонус к золоту.",
     chk:()=>S.bestiary>0},
  {nm:"Престиж",             txt:"С 20-го этажа открыт престиж: продай данж Кредо — получи души и древо талантов (они не сбрасываются).",
    chk:()=>S.tutFlags.soulsInfo},
@@ -1838,7 +1951,7 @@ setInterval(()=>{
   try{ clanSim(); }catch(err){ console.error(err); }
   try{ tutCheck(); }catch(err){ console.error(err); }
   try{
-    if(curTab==="raid"||curTab==="clan") renderList(); // обновлять таймеры
+    if(curTab==="clan") renderList(); // обновлять таймеры
     content.querySelectorAll("button[data-fn]").forEach(b=>{
       const f=b.dataset.fn;
       if(f==="buyTap") b.disabled=S.gold<tapCost();
