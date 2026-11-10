@@ -231,7 +231,7 @@ const ACHIEVEMENTS=[
   {id:"first_hero",    nm:"Первый наём",    desc:"Найми любого героя",            icon:"🛡", reward:{pwr:2,don:1}},
   {id:"clan_join",     nm:"Свой в доску",   desc:"Вступи в любой клан",           icon:"🏰", reward:{pwr:5,don:0}},
   {id:"clan_boss",     nm:"Ревизор",        desc:"Убей босса клана штурмом",      icon:"👹", reward:{pwr:0,don:3}},
-  {id:"shop_all",      nm:"Покупатель",     desc:"Купи все 3 усиления в ЛАВКЕ",   icon:"💎", reward:{pwr:8,don:2}},
+  {id:"first_raid",    nm:"Первая охота",   desc:"Заведи первый рейд на стражей", icon:"⚔", reward:{pwr:4,don:0}},
 ];
 /* 📶 Прогрессивные достижения: лестницы ступеней. S.prog[key] = сколько ступеней засчитано */
 const PROG={
@@ -268,46 +268,87 @@ function progRewardTxt(reward){
   if(reward.don) parts.push("+"+reward.don+" 💎");
   return parts.join(" ");
 }
-/* Проверка лестниц (всех или одной): выдаёт заслуженные ступени. Вызывать после роста метрики */
-function checkProg(only){
-  let granted=false;
-  for(const key in PROG){
-    if(only && key!==only) continue;
-    const L=PROG[key];
-    let cur=Math.min((S.prog&&S.prog[key])||0, L.tiers.length);
-    while(cur<L.tiers.length && L.get()>=L.tiers[cur].n){
-      cur++;
-      const t=L.tiers[cur-1];
-      S.prog[key]=cur;
-      S.achNew=(S.achNew||0)+1; // 🔴 новая ступень — бейдж на книге
-      S.gold+=goldReward(t.r.pwr||0); S.don+=t.r.don||0; // 💰 награды без душ: души только за престиж
-      ded("🏆 "+L.icon+" "+L.nm+" "+roman(cur)+": "+t.nm+" — "+(progRewardTxt(t.r)||"молодец"));
-      try{ sfxWin(); }catch(e){}
-      granted=true;
-    }
-  }
-  if(granted){ save(); refreshHud(); try{ renderList(); }catch(e){} }
-  return granted;
+/* Лестницы: награды теперь ТОЛЬКО по кнопке «ЗАБРАТЬ» в книге. checkProg — совместимость вызовов */
+function checkProg(only){ return false; }
+
+/* Сколько ступеней лестницы готово к забору (не зачислено, но метрика дотянулась) */
+function progReady(key){
+  const L=PROG[key];
+  const cur=Math.min((S.prog&&S.prog[key])||0, L.tiers.length);
+  let hi=cur;
+  while(hi<L.tiers.length && L.get()>=L.tiers[hi].n) hi++;
+  return {cur, ready:hi-cur};
+}
+/* Событие «выполнено, ждёт забора» */
+function achReady(id){ return S.achReady&&S.achReady[id]&&!(S.ach&&S.ach[id]); }
+function claimableAch(){ // 🔴 бейдж книги: готовые к забору награды
+  let n=0;
+  for(const k in PROG) n+=progReady(k).ready;
+  for(const a of ACHIEVEMENTS) if(achReady(a.id)) n++;
+  return n+((S.achNew||0)>0?1:0); // + легендарное открытие, если бейдж ещё не гасили
 }
 function checkAchievement(id){
-  if(!S.ach || S.ach[id]) return false;
+  if(!S.ach || S.ach[id] || (S.achReady&&S.achReady[id])) return false;
   const a=ACHIEVEMENTS.find(x=>x.id===id);
   if(!a) return false;
-  S.ach[id]=true;
-  S.achNew=(S.achNew||0)+1; // 🔴 непросмотренное достижение — бейдж на книге
+  S.achReady[id]=true; // 🎁 выполнено, но деньги отдаёт только кнопка «ЗАБРАТЬ»
+  save(); refreshBadges();
+  return true;
+}
+/* Забрать награду события (кнопка в ПЕРВЫХ ШАГАХ) */
+function claimAch(id){
+  if(!achReady(id)) return;
+  const a=ACHIEVEMENTS.find(x=>x.id===id);
+  S.achReady[id]=false; S.ach[id]=true;
   const r=a.reward||{};
   S.gold+=goldReward(r.pwr||0)+(r.gold||0); S.don+=r.don||0;
   const parts=[];
   if(r.pwr)   parts.push("+"+fmt(goldReward(r.pwr))+" 💰");
   if(r.don)   parts.push("+"+r.don+" 💎");
   if(r.gold)  parts.push("+"+fmt(r.gold)+" 💰");
-  ded(parts.length ? ("🏆 Достижение: «"+a.nm+"» — "+parts.join(" ")) : ("🏆 Достижение: «"+a.nm+"»"));
+  ded("🏅 ПЕРВЫЕ ШАГИ: «"+a.nm+"» — "+(parts.join(" ")||"молодец"));
+  try{ bigBurst(); sfxWin(); haptic("notify","success"); }catch(e){}
+  save(); refreshHud(); refreshBadges();
+}
+/* Забрать награду лестницы: все дотянувшиеся ступени разом */
+function claimProg(key){
+  const L=PROG[key], p=progReady(key);
+  if(p.ready<1) return;
+  let pw=0, dn=0;
+  for(let i=p.cur;i<p.cur+p.ready;i++){ pw+=L.tiers[i].r.pwr||0; dn+=L.tiers[i].r.don||0; }
+  S.prog[key]=p.cur+p.ready;
+  S.gold+=goldReward(pw); S.don+=dn;
+  const rng=p.ready>1?(" "+roman(p.cur+1)+"–"+roman(p.cur+p.ready)):(" "+roman(p.cur+1));
+  ded("📶 "+L.icon+" "+L.nm+rng+" — +"+fmt(goldReward(pw))+" 💰"+(dn?(" +"+dn+" 💎"):""));
+  try{ bigBurst(); sfxWin(); haptic("notify","success"); }catch(e){}
+  save(); refreshHud(); refreshBadges();
+}
+function achCount(){ let n=0; for(const k in S.ach) if(S.ach[k]&&!LEGEND.some(l=>l.id===k)) n++; return n; } // 🌟 легендки не считаются дважды
+
+/* ================= 🌟 ЛЕГЕНДАРНЫЕ ДОСТИЖЕНИЯ ================= */
+/* Скрыты в книге под «?????» пока не заработаны. Награды — кристаллы 💎 */
+const LEGEND=[
+  {id:"abyss",     nm:"ПРОРЫВ БЕЗДНЫ",       icon:"🕳", how:"Спустись до 150-го этажа — туда добираются редкие", hint:"«Даже я туда не хожу. Сто пятидесятый — число дурное.»", reward:{don:10}},
+  {id:"raid5",     nm:"ВЕЛИКИЙ ОХОТНИК",     icon:"⭐",  how:"Победи в рейде соперника с пятью ★",       hint:"«Пять звёзд — и ни единой раны на тёплой осанке.»", reward:{don:5}},
+  {id:"renegade",  nm:"ПОЗДНЯЯ ЗАЖИГОЧКА",   icon:"👻", how:"Продай Кредо данж со 100-го этажа и выше", hint:"«Есть жадность полезная, а есть — опоздавшая.»", reward:{don:8}},
+  {id:"mind",      nm:"АБСОЛЮТНЫЙ УМ",       icon:"🧠", how:"Выучи древо талантов до последнего узла",  hint:"«Совершенство — двенадцать узлов и ни лишнего.»", reward:{don:15}},
+  {id:"chests",    nm:"КАЗНАЧЕЙ КЛАНА",      icon:"🗝", how:"Забери 10 трофеев клановых боссов за все времена", hint:"«Десять сундуков — и казна тебя запомнит.»", reward:{don:8}},
+  {id:"shop_all",  nm:"ЖАДНЫЙ КРИСТАЛЛ",     icon:"💎", how:"Купи все 3 усиления в ЛАВКЕ",              hint:"«В лавке живёт жадный кристалл. Скупи всё — и он запомнит.»", reward:{don:10}},
+];
+function checkLegend(id){
+  if(!S.ach || S.ach[id]) return false;
+  const a=LEGEND.find(x=>x.id===id);
+  if(!a) return false;
+  S.ach[id]=true;
+  S.achNew=(S.achNew||0)+1; // 🔴 бейдж на книге
+  S.don+=a.reward.don||0;
+  ded("🌟 ЛЕГЕНДА ОТКРЫТА: «"+a.nm+"» — +"+(a.reward.don||0)+" 💎");
   try{ sfxWin(); }catch(e){}
   save(); refreshHud();
   try{ renderList(); }catch(e){}
   return true;
 }
-function achCount(){ let n=0; for(const k in S.ach) if(S.ach[k]) n++; return n; }
+function legendCount(){ let n=0; for(const a of LEGEND) if(S.ach&&S.ach[a.id]) n++; return n; }
 
 /* ================= 🔴 БЕЙДЖИ-ИНДИКАТОРЫ ================= */
 /* Красные циферки: на КВЕСТЫ — готовые к забору квесты, на 🏆 — новые достижения */
@@ -330,7 +371,7 @@ function setBadge(id,n){
 }
 function refreshBadges(){
   try{ setBadge("qbBadge",claimableQuests()); }catch(err){}
-  try{ setBadge("abBadge",S.achNew||0); }catch(err){}
+  try{ setBadge("abBadge",claimableAch()); }catch(err){}
 }
 
 const TALENTS = {
@@ -394,7 +435,7 @@ function freshState(){
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
     wquests:{wk:0, list:[], claimed:[], genT:0}, // 📅 недельные квесты
-    ach:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, // 🏆 достижения, лестницы, 🛒 прокачка ×N
+    ach:{}, achReady:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, chestsEver:0, // 🏆 достижения, 🎁 забор, 🛒 ×N, 🗝 все сундуки
   };
 }
 let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
@@ -434,6 +475,8 @@ function load(){
   if(!S.ach || typeof S.ach!=="object") S.ach={};
   if(typeof S.achNew!=="number") S.achNew=0; // 🏆 новые достижения, ещё не просмотренные в книге
   if(typeof S.floorTop!=="number") S.floorTop=0;
+  if(typeof S.chestsEver!=="number") S.chestsEver=0; // 🗝 все сундуки клановых боссов
+  if(!S.achReady || typeof S.achReady!=="object" || Array.isArray(S.achReady)) S.achReady={}; // 🎁 незабранные события
   if(!S.prog || typeof S.prog!=="object") S.prog={tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0};
   for(const k in PROG) if(typeof S.prog[k]!=="number") S.prog[k]=0;
   // миграция старых статических ачивок в ступени лестниц (всё заработанное сохраняется)
@@ -457,6 +500,7 @@ function load(){
     if(res.souls>0){ S.souls+=res.souls; }
     S.runBest = Math.max(S.runBest, S.floor);
   S.floorTop = Math.max(S.floorTop||0, S.floor); // 🏰 вечный рекорд для лестницы "Скалолаз"
+  if(S.floorTop>=150) try{ checkLegend("abyss"); }catch(e){} // 🌟 прорыв Бездны
     let msg=`Пока тебя не было (${Math.ceil(dt/60)} мин), я дробил башню за тебя.`;
     if(res.gold>0) msg+=` Добыто: ${fmt(res.gold)} 💰`;
     if(res.souls>0) msg+=` Душ: ${res.souls} 👻`;
@@ -859,40 +903,65 @@ function renderAchBook(){
     if(bookTab==="best"){
       h+=bookBestiary();
     } else {
-      h+="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+(achCount()+progCount())+" из "+(ACHIEVEMENTS.length+progTotal())+"</div>";
-      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:2px 0 4px;'>📶 ЛЕСТНИЦЫ · ступени растут вместе с тобой</div>";
+      h+="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+(achCount()+progCount()+legendCount())+" из "+(ACHIEVEMENTS.length+progTotal()+LEGEND.length)+"</div>";
       for(const key in PROG){
         const L=PROG[key];
-        const cur=Math.min((S.prog&&S.prog[key])||0, L.tiers.length);
+        const rd=progReady(key);
+        const cur=rd.cur;
         const val=L.get()||0;
         const next=cur<L.tiers.length?L.tiers[cur]:null;
         const prevN=cur>0?L.tiers[cur-1].n:0;
         const frac=next?Math.max(0,Math.min(1,(val-prevN)/Math.max(1,next.n-prevN))):1;
         const pct=Math.round(frac*100);
         const dots=L.tiers.map((t,i)=>"<span style='display:inline-block; width:8px; height:8px; margin:0 2px; border-radius:2px; background:"+(i<cur?"#ffd75e":"#2a2148")+";'></span>").join("");
-        h+="<div style='margin:6px 0; padding:8px; background:"+(next?"#15101e":"#20301f")+"; border:1px solid "+(next?"#352a5e":"#5f9e46")+"; border-radius:8px;'>"
+        let pw=0, dn=0; // 🎁 сумма пачки готовых ступеней
+        for(let i=cur;i<cur+rd.ready;i++){ pw+=L.tiers[i].r.pwr||0; dn+=L.tiers[i].r.don||0; }
+        const isReady=rd.ready>0, isMax=cur>=L.tiers.length;
+        h+="<div style='margin:6px 0; padding:8px; background:"+(isReady?"#2a2205":(isMax?"#20301f":"#15101e"))+"; border:1px solid "+(isReady?"#ff9e2c":(isMax?"#5f9e46":"#352a5e"))+"; border-radius:8px;'>"
           +"<div style='display:flex; align-items:center;'>"
           +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(cur>0?L.icon:"🔒")+"</div>"
           +"<div style='flex:1 1 auto;'>"
           +"<div style='font-weight:bold; color:"+(cur>0?"#ffd75e":"#9a92c0")+";'>"+L.nm+(cur>0?" "+roman(cur):"")+"</div>"
           +"<div style='font-size:11px;'>"+dots+"</div>"
-          +"</div>"
-          +"<div style='font-size:11px; color:"+(next?"#7a7a8a":"#7fd17f")+"; white-space:nowrap;'>"+(next?(cur+"/"+L.tiers.length):"◎ МАКС")+"</div>"
-          +"</div>"
+          +"</div></div>"
           +"<div style='margin:4px 0 3px; height:8px; background:#0e0a1a; border:1px solid #352a5e; border-radius:4px; overflow:hidden;'>"
           +"<div style='height:100%; width:"+pct+"%; background:"+(next?"#e0a330":"#5f9e46")+";'></div></div>"
           +"<div style='font-size:11px; color:#9a92c0;'>"+(next?(fmt(val)+" / "+fmt(next.n)+" "+L.unit+" · «"+next.nm+"» даёт "+progRewardTxt(next.r)):"Все ступени взяты. Легенда БАШНИ!")+"</div>"
+          +(isReady?"<button class='buy ready' style='width:100%; margin-top:6px;' data-fn='claimProg_"+key+"'>🎁 ЗАБРАТЬ +"+fmt(goldReward(pw))+" 💰"+(dn?(" +"+dn+" 💎"):"")+(rd.ready>1?(" · "+rd.ready+" ступени"):"")+"</button>":"")
           +"</div>";
       }
-      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🎖 СОБЫТИЯ</div>";
+      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🏅 ПЕРВЫЕ ШАГИ</div>";
       ACHIEVEMENTS.forEach(a=>{
         const done=!!(S.ach&&S.ach[a.id]);
-        h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#20301f":"#15101e")+"; border:1px solid "+(done?"#5f9e46":"#352a5e")+"; border-radius:8px; display:flex; align-items:center;'>"
-          +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"🔒")+"</div>"
+        const rdy=achReady(a.id);
+        const secret=a.secret&&!rdy&&!done; // до выполнения не раскрываем имени
+        h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#20301f":(rdy?"#2a2205":"#15101e"))+"; border:1px solid "+(done?"#5f9e46":(rdy?"#ff9e2c":"#352a5e"))+"; border-radius:8px; display:flex; align-items:center;'>"
+          +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:(rdy?"🎁":(secret?"❔":"🔒")))+"</div>"
           +"<div style='flex:1 1 auto;'>"
-          +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#9a92c0")+";'>"+a.nm+"</div>"
+          +"<div style='font-weight:bold; color:"+(done||rdy?"#ffd75e":"#9a92c0")+";'>"
+          +(secret?("????? <span style='font-size:10px; font-weight:normal; color:#6a5a8a;'>секретное</span>"):a.nm)+"</div>"
           +(done?"<div style='font-size:11px; color:#7fd17f;'>Награда: "+achRewardTxt(a.reward||{})+"</div>"
-                :"<div style='font-size:11px; color:#7a7a8a;'>"+a.desc+"</div>")
+            :(rdy?"<div style='font-size:11px; color:#ff9e2c;'>Выполнено — награда ждёт!</div>"
+              :(secret?"<div style='font-size:11px; color:#7a6f96; font-style:italic;'>"+a.secret+"</div>"
+                       :"<div style='font-size:11px; color:#7a7a8a;'>"+a.desc+"</div>")))
+          +"</div>"
+          +(rdy?"<button class='buy ready' style='white-space:nowrap;' data-fn='claimAch_"+a.id+"'>🎁 ЗАБРАТЬ</button>":"")
+          +"</div>";
+      });
+      // 🌟 легендарки: внутри вкладки ДОСТИЖЕНИЯ, до открытия — «?????»
+      h+="<div style='color:#ff9e2c; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🌟 ЛЕГЕНДАРНЫЕ · "+legendCount()+"/"+LEGEND.length+"</div>";
+      LEGEND.forEach(a=>{
+        const done=!!(S.ach&&S.ach[a.id]);
+        h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#3a2600":"#181124")+"; border:1px solid "+(done?"#ff9e2c":"#4a2a6e")+"; border-radius:8px; display:flex; align-items:center;'>"
+          +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"❔")+"</div>"
+          +"<div style='flex:1 1 auto;'>"
+          +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#8a7fa8")+"; letter-spacing:1px;'>"
+          +(done?a.nm:"?????")
+          +(done?"":" <span style='font-size:10px; font-weight:normal; color:#6a5a8a;'>легендарное</span>")+"</div>"
+          +(done
+            ?"<div style='font-size:11px; color:#9a92c0;'>"+a.how+"</div>"
+            :"<div style='font-size:11px; color:#7a6f96; font-style:italic;'>"+a.hint+"</div>")
+          +"<div style='font-size:11px; color:#7fd17f;'>Награда: +"+a.reward.don+" 💎</div>"
           +"</div></div>";
       });
     }
@@ -904,7 +973,13 @@ achBtnEl.addEventListener("click",()=>{ audio(); achBookEl.style.display="block"
 achCloseEl.addEventListener("click",()=>{ achBookEl.style.display="none"; haptic("select"); });
 achContentEl.addEventListener("click",e=>{
   const t=e.target.closest("[data-booktab]");
-  if(t){ bookTab=t.getAttribute("data-booktab"); renderAchBook(); haptic("select"); }
+  if(t){ bookTab=t.getAttribute("data-booktab"); renderAchBook(); haptic("select"); return; }
+  const c=e.target.closest("[data-fn]");
+  if(!c) return;
+  audio();
+  const f=c.getAttribute("data-fn");
+  if(f.startsWith("claimProg_")){ claimProg(f.slice(10)); renderAchBook(); }
+  else if(f.startsWith("claimAch_")){ claimAch(f.slice(9)); renderAchBook(); }
 });
 const restartBtnEl=document.getElementById("restartBtn");
 restartBtnEl.addEventListener("click",()=>{
@@ -968,6 +1043,7 @@ function startRaid(kind){
   }
   if(S.torches<=0) return;
   S.torches--; if(S.torches===2) S.lastTorchT=Date.now();
+  checkAchievement("first_raid"); // 🏅 первая охота на стражей
   const base= kind==="clan"
     ? Math.max(5,totalDps(false))*5
     : Math.max(5,totalDps(false))*(6+S.opp.t*1.5);
@@ -995,6 +1071,7 @@ function killStrazh(now){
 function winRaid(){
   S.raidWins++;
   try{ questProgress("raid",1); checkProg("raid"); }catch(e){}
+  if((RAID.opp&&RAID.opp.t>=5)||(S.opp&&S.opp.t>=5)){ try{ checkLegend("raid5"); }catch(e){} } // 🌟 охота на 5★
   if(RAID.kind==="clan" && S.clan.id>=0){
     const dmg=Math.floor(clanBossDmgHit()*2.5);
     S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
@@ -1113,7 +1190,9 @@ function clanBossDmgHit(){
 function giveClanChest(silent){
   const loot=Math.floor((3*Math.pow(1.15,Math.max(S.runBest,10)-1))*52*goldMulti()); // 🏰 в сундуке золото (щедрее взамен душ)
   S.gold+=loot; S.glory+=50; addRate(loot);
+  S.chestsEver=(S.chestsEver||0)+1; // 🎖 за все времена (не сбрасывается) → лестница легенды "Казначей"
   S.clan.chest=0; save(); refreshHud();
+  if(S.chestsEver>=10){ try{ checkLegend("chests"); }catch(e){} } // 🌟 10 трофеев клановых боссов
   if(!silent){
     bigBurst(); sfxWin(); haptic("notify","success");
     ded("⚔ Клан сбил босса! Твой честный пай: "+fmt(loot)+" 💰 и 50 Славы.");
@@ -1132,6 +1211,7 @@ function spawnWave(){
   M.hp = M.max; M.tStart = performance.now();
   S.runBest = Math.max(S.runBest, S.floor);
   S.floorTop = Math.max(S.floorTop||0, S.floor); // 🏰 вечный рекорд для лестницы "Скалолаз"
+  if(S.floorTop>=150) try{ checkLegend("abyss"); }catch(e){} // 🌟 прорыв Бездны
   if(S.wave===10){
     if(M.info.kind==="boss"){ ded(pick(DED_BOSS)); sfxBossIn(); }
     if(S.floor===3 && !S.hintKontra){ S.hintKontra=true; ded("5 быстрых тапов подряд — 6-й бьёт как три. Запомни: у меня память уже не та."); }
@@ -2048,11 +2128,12 @@ function attachDelegated(){
       else if(f.startsWith("buyShop_")){
         const type=f.slice(10), cost={tap:30,dps:75,boss:150}[type];
         if(S.don>=cost&&!S.shop[type]){ S.don-=cost; S.shop[type]=true; sfxBuy(); haptic("notify","success"); renderList();
-          if(S.shop.tap&&S.shop.dps&&S.shop.boss) checkAchievement("shop_all"); }
+          if(S.shop.tap&&S.shop.dps&&S.shop.boss) checkLegend("shop_all"); }
       }
       else if(f.startsWith("buyTal_")){
         const key=f.slice(7), p=talPlan(key);
-        if(p.k>0){ S.souls-=p.total; S.tQty[key]+=p.k; addFloat(CW/2,CH*0.3,"👻 ТАЛАНТ ↑"+(p.k>1?" ×"+p.k:""),true); sfxBuy(); haptic("notify","success"); }
+        if(p.k>0){ S.souls-=p.total; S.tQty[key]+=p.k; addFloat(CW/2,CH*0.3,"👻 ТАЛАНТ ↑"+(p.k>1?" ×"+p.k:""),true); sfxBuy(); haptic("notify","success");
+          if(S.tQty.tap+S.tQty.leg+S.tQty.mar>=12) checkLegend("mind"); } // 🌟 древо выучено целиком
       }
       else if(f==="rollOpp"){ rollOpp(); haptic("select"); }
       else if(f==="startRaid"){ startRaid(); haptic("impact","heavy"); }
@@ -2064,6 +2145,7 @@ function attachDelegated(){
       else if(f==="prestige"&&S.floor>=20){
         const g=soulsGain();
         if(confirm("Продать данж Кредо?\nПолучишь: "+g+" душ\n+1 парагон и +10 кристаллов\nСброс: этажи, монеты, герои, кулак.")){
+          if(S.floor>=100) checkLegend("renegade"); // 🌟 жадность опоздавшая — выше 99-го
           S.souls+=g; S.firstPrestige=true;
           S.par++; S.don+=10; // парагон и кристаллы остаются навсегда
           S.floor=1; S.runBest=1; S.gold=0; S.tapLvl=0;
