@@ -76,6 +76,17 @@
     <span class="donate" id="donLbl">💎 0</span>
     <span id="restartBtn" style="cursor:pointer" title="С начала этажа (пересдача)">↺</span>
     <span id="muteBtn" style="cursor:pointer" title="Звук">🔊</span>
+    <span id="achBtn" style="cursor:pointer" title="Книга достижений">🏆</span>
+  </div>
+
+  <div id="achBook" style="display:none; position:fixed; inset:0; z-index:60; background:rgba(10,7,18,0.88); padding:22px 10px;">
+    <div style="max-width:480px; margin:0 auto; height:100%; background:#1a142e; border:2px solid #7a5c14; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 34px rgba(122,92,20,0.55);">
+      <div style="background:#3d2f0a; border-bottom:2px solid #7a5c14; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:bold; color:#ffd75e;">🏆 КНИГА ДОСТИЖЕНИЙ</div>
+        <span id="achClose" style="cursor:pointer; font-size:18px;">✕</span>
+      </div>
+      <div id="achContent" style="flex:1 1 auto; overflow-y:auto; padding:10px; font-size:14px;"></div>
+    </div>
   </div>
 
   <div id="stage">
@@ -141,9 +152,9 @@ const H_GROW=1.15, H_COST=1.075, T_GROW=1.65, T_COST=1.07;
 const QUEST_TYPES=[
   {nm:"Убей боссов", desc:"Повергни боссов на кульминациях этажей", type:"boss", target:3, reward:{souls:3,don:0,gold:500}},
   {nm:"Тапни раз", desc:"Сделай 50 тапов по монстру", type:"tap", target:50, reward:{souls:2,don:0,gold:300}},
-  {nm":"Пройди этажи", desc":"Дойди до N-го этажа", type:"floor", target:5, reward:{souls:5,don:1,gold:1000}},
-  {nm":"Выиграй рейды", desc:"Побеждай в рейдах", type:"raid", target:2, reward:{souls:4,don:0,gold:700}},
-  {nm":"Собери золота", desc:"Накопи N золота", type:"gold", target:10000, reward:{souls:2,don:0,gold:0}},
+  {nm:"Пройди этажи", desc:"Дойди до N-го этажа", type:"floor", target:5, reward:{souls:5,don:1,gold:1000}},
+  {nm:"Выиграй рейды", desc:"Побеждай в рейдах", type:"raid", target:2, reward:{souls:4,don:0,gold:700}},
+  {nm:"Собери золота", desc:"Накопи N золота", type:"gold", target:10000, reward:{souls:2,don:0,gold:0}},
 ];
 function dayIdx_q(){ return Math.floor(Date.now()/864e5); }
 function genQuests(){
@@ -175,6 +186,43 @@ function claimQuest(qIdx){
   ded("Квест выполнен: «"+q.nm+"» — +" + (q.reward.souls||0) + " 👻, +" + (q.reward.gold||0) + " 💰" + (q.reward.don||0?(" +"+q.reward.don+" 💎"):""));
   save(); renderList(); refreshHud();
 }
+
+/* ================= ДОСТИЖЕНИЯ (книга в HUD, бестиарий внутри) ================= */
+const ACHIEVEMENTS=[
+  {id:"first_tap",     nm:"Первый тап",     desc:"Тапни по монстру",              icon:"✊", reward:{souls:1}},
+  {id:"first_hero",    nm:"Первый наём",    desc:"Найми любого героя",            icon:"🛡", reward:{souls:2}},
+  {id:"first_prestige",nm:"Первый престиж", desc:"Продай данж Кредо впервые",     icon:"👻", reward:{don:5}},
+  {id:"prestige_3",    nm:"Ветеран",        desc:"Сделай 3 престижа",             icon:"👻", reward:{souls:15,don:5}},
+  {id:"floor_50",      nm:"Покоритель 50",  desc:"Дойди до 50-го этажа",          icon:"🏰", reward:{souls:5}},
+  {id:"floor_100",     nm:"Покоритель 100", desc:"Дойди до 100-го этажа",         icon:"🏰", reward:{souls:10,don:1}},
+  {id:"floor_200",     nm:"Покоритель 200", desc:"Дойди до 200-го этажа",         icon:"🏰", reward:{souls:20,don:5}},
+  {id:"boss_slayer",   nm:"Убийца боссов",  desc:"Поверги 10 боссов",             icon:"☠", reward:{souls:5}},
+  {id:"clan_join",     nm:"Свой в доску",   desc:"Вступи в любой клан",           icon:"🏰", reward:{gold:1000}},
+  {id:"clan_boss",     nm:"Ревизор",        desc:"Убей босса клана штурмом",      icon:"👹", reward:{don:3}},
+  {id:"raid_win",      nm:"Рейдер",         desc:"Выиграй 5 рейдов",              icon:"⚔", reward:{gold:2000}},
+  {id:"tap_1000",      nm:"Быстрый палец",  desc:"Сделай 1000 тапов",             icon:"👆", reward:{souls:3}},
+  {id:"bestiary_3",    nm:"Охотник I",      desc:"Поймай 3 монстров в бестиарий", icon:"📚", reward:{souls:3}},
+  {id:"bestiary_10",   nm:"Охотник II",     desc:"Поймай 10 монстров в бестиарий",icon:"📚", reward:{souls:8,don:2}},
+  {id:"shop_all",      nm:"Покупатель",     desc:"Купи все 3 усиления в ЛАВКЕ",   icon:"💎", reward:{souls:10}},
+];
+function checkAchievement(id){
+  if(!S.ach || S.ach[id]) return false;
+  const a=ACHIEVEMENTS.find(x=>x.id===id);
+  if(!a) return false;
+  S.ach[id]=true;
+  const r=a.reward||{};
+  S.souls+=r.souls||0; S.don+=r.don||0; S.gold+=r.gold||0;
+  const parts=[];
+  if(r.souls) parts.push("+"+r.souls+" 👻");
+  if(r.don)   parts.push("+"+r.don+" 💎");
+  if(r.gold)  parts.push("+"+fmt(r.gold)+" 💰");
+  ded(parts.length ? ("🏆 Достижение: «"+a.nm+"» — "+parts.join(" ")) : ("🏆 Достижение: «"+a.nm+"»"));
+  try{ sfxWin(); }catch(e){}
+  save(); refreshHud();
+  try{ renderList(); }catch(e){}
+  return true;
+}
+function achCount(){ let n=0; for(const k in S.ach) if(S.ach[k]) n++; return n; }
 
 const TALENTS = {
   tap: { nm:"🗡 Кликер",  nodes:[ {c:1,d:"Тап ×1.25"}, {c:2,d:"Тап ×1.5"}, {c:4,d:"Автотап 1/сек"}, {c:8,d:"Тап ×2"} ] },
@@ -236,6 +284,7 @@ function freshState(){
       chest:0, hitsToday:0, day:0, lastSim:0},
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
+    ach:{}, raidWins:0, bossKills:0, // 🏆 достижения, счётчики рейд-побед и боссов
   };
 }
 let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
@@ -262,11 +311,14 @@ function load(){
   if(typeof S.lastOnline!=="number") S.lastOnline=Date.now();
   if(!Array.isArray(S.bestiaryList)) S.bestiaryList=[];
   if(typeof S.bestiary!=="number") S.bestiary=0;
-  if(!S.quests || typeof S.quests!==\"object\") S.quests={day:0,list:[],claimed:[],genT:0};
+  if(!S.quests || typeof S.quests!=="object") S.quests={day:0,list:[],claimed:[],genT:0};
   if(!Array.isArray(S.quests.list)) S.quests.list=[];
   if(!Array.isArray(S.quests.claimed)) S.quests.claimed=[];
-  if(typeof S.quests.day!==\"number\") S.quests.day=0;
-  if(typeof S.quests.genT!==\"number\") S.quests.genT=0;
+  if(typeof S.quests.day!=="number") S.quests.day=0;
+  if(typeof S.quests.genT!=="number") S.quests.genT=0;
+  if(!S.ach || typeof S.ach!=="object") S.ach={};
+  if(typeof S.raidWins!=="number") S.raidWins=0;
+  if(typeof S.bossKills!=="number") S.bossKills=0;
   // оффлайн-башня: реальный автобой через этажи с кульминациями каждые 10 этажей (макс 8 ч)
   const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
   if(dt>30){
@@ -591,6 +643,45 @@ function sfxPrestige(){
 }
 function syncMute(){ muteBtnEl.textContent=muted?"🔇":"🔊"; }
 muteBtnEl.addEventListener("click",()=>{ muted=!muted; if(S)S.muted=muted; syncMute(); audio(); haptic("select"); });
+/* ===== книга достижений: кнопка 🏆 в HUD, открытие/закрытие ===== */
+const achBtnEl=document.getElementById("achBtn");
+const achBookEl=document.getElementById("achBook");
+const achCloseEl=document.getElementById("achClose");
+const achContentEl=document.getElementById("achContent");
+function achRewardTxt(r){
+  const p=[];
+  if(r.souls) p.push("+"+r.souls+" 👻");
+  if(r.don) p.push("+"+r.don+" 💎");
+  if(r.gold) p.push("+"+fmt(r.gold)+" 💰");
+  return p.join(" · ")||"—";
+}
+function renderAchBook(){
+  try{
+    let h="<div style='color:#9a92c0; font-size:12px; margin-bottom:8px;'>Получено "+achCount()+" из "+ACHIEVEMENTS.length+"</div>";
+    ACHIEVEMENTS.forEach(a=>{
+      const done=!!(S.ach&&S.ach[a.id]);
+      h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#20301f":"#15101e")+"; border:1px solid "+(done?"#5f9e46":"#352a5e")+"; border-radius:8px; display:flex; align-items:center;'>"
+        +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"🔒")+"</div>"
+        +"<div style='flex:1 1 auto;'>"
+        +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#9a92c0")+";'>"+a.nm+"</div>"
+        +(done?"<div style='font-size:11px; color:#7fd17f;'>Награда: "+achRewardTxt(a.reward||{})+"</div>"
+              :"<div style='font-size:11px; color:#7a7a8a;'>"+a.desc+"</div>")
+        +"</div></div>";
+    });
+    const bl=S.bestiaryList||[];
+    h+="<div style='margin:14px 0 6px; font-weight:bold; color:#ffd75e;'>📚 БЕСТИАРИЙ — поймано: "+bl.length+(S.bestiary?(" · бонус к золоту +"+Math.round(S.bestiary*2)+"%"):"")+"</div>";
+    if(!bl.length) h+="<div style='color:#7a7a8a; font-size:12px;'>Тут пусто. Рейды — шанс 25% изловить поверженного соперника.</div>";
+    bl.forEach(b=>{
+      h+="<div style='margin:4px 0; padding:6px 8px; background:#1d1830; border:1px solid #352a5e; border-radius:6px;'>"
+        +"<div style='font-weight:bold; font-size:13px;'>"+(b&&b.nm?b.nm:"??")+"</div>"
+        +"<div style='font-size:10px; color:#7a7a8a;'>"+(b&&b.sub?b.sub+" · ":"")+new Date(b&&b.t||Date.now()).toLocaleDateString()+"</div>"
+        +"</div>";
+    });
+    achContentEl.innerHTML=h;
+  }catch(err){ achContentEl.innerHTML="<div style='color:#d84a3a'>Ошибка рисования книги: "+err.message+"</div>"; }
+}
+achBtnEl.addEventListener("click",()=>{ audio(); renderAchBook(); achBookEl.style.display="block"; haptic("select"); });
+achCloseEl.addEventListener("click",()=>{ achBookEl.style.display="none"; haptic("select"); });
 const restartBtnEl=document.getElementById("restartBtn");
 restartBtnEl.addEventListener("click",()=>{
   audio();
@@ -678,6 +769,8 @@ function killStrazh(now){
   else { RAID.max=Math.round(RAID.base*(1+RAID.kills*0.35)); RAID.hp=RAID.max; }
 }
 function winRaid(){
+  S.raidWins++;
+  try{ questProgress("raid",1); if(S.raidWins>=5) checkAchievement("raid_win"); }catch(e){}
   if(RAID.kind==="clan" && S.clan.id>=0){
     const dmg=Math.floor(clanBossDmgHit()*2.5);
     S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
@@ -698,6 +791,7 @@ function winRaid(){
     S.bestiary++;
     S.bestiaryList.push({nm:RAID.opp.n,sub:"Пойман в рейде",t:Date.now()});
     if(S.bestiaryList.length>50) S.bestiaryList.shift();
+    try{ if(S.bestiary>=3) checkAchievement("bestiary_3"); if(S.bestiary>=10) checkAchievement("bestiary_10"); }catch(e){}
   }
   if(S.clan&&S.clan.id>=0){ S.clan.pts+=25; S.clan.contrib+=25; }
   addRate(loot);
@@ -785,6 +879,7 @@ function joinClan(id){
   S.tutFlags.clan=true;
   ded("«"+CLANS[id].n+"» принимает тебя, наследник! "+CLANS[id].motto);
   sfxBuy(); save(); renderList(); refreshHud();
+  checkAchievement("clan_join");
 }
 function clanBossDmgHit(){
   return totalDps(false)*20*(clanBuff("boss")?1.3:1);
@@ -796,6 +891,7 @@ function giveClanChest(silent){
   if(!silent){
     bigBurst(); sfxWin(); haptic("notify","success");
     ded("⚔ Клан сбил босса! Твой честный пай: "+fmt(loot)+" 💰, 2 👻 и 50 Славы.");
+    checkAchievement("clan_boss");
     renderList();
   }
 }
@@ -826,7 +922,7 @@ function killReward(){
   S.pity=0;
   if(S.wave===10){ // кульминация этажа повержена
     S.tutFlags.climax=true;
-    if(kind==="boss") S.tutFlags.boss=true;
+    if(kind==="boss"){ S.tutFlags.boss=true; S.bossKills++; try{ questProgress("boss",1); if(S.bossKills>=10) checkAchievement("boss_slayer"); }catch(e){} }
     if(S.clan&&S.clan.id>=0&&S.clan.bossHp>0){ // вклад в босса клана
       const dmg=monsterBase(S.floor)*10*(kind==="boss"?2:1);
       S.clan.bossHp=Math.max(0,S.clan.bossHp-dmg);
@@ -835,10 +931,18 @@ function killReward(){
     }
   }
   if(S.wave<10){ S.wave++; spawnWave(); }
-  else if(S.floor<MAX_FLOOR){ S.floor++; S.wave=1; spawnWave(); }
+  else if(S.floor<MAX_FLOOR){
+    S.floor++; S.wave=1; spawnWave();
+    try{
+      questProgress("floor",1);
+      if(S.floor>=50) checkAchievement("floor_50");
+      if(S.floor>=100) checkAchievement("floor_100");
+      if(S.floor>=200) checkAchievement("floor_200");
+    }catch(e){}
+  }
   refreshHud(); renderList();
 }
-function addRate(g){ S.rateBuf.push([Date.now(),g]); pruneRate(); }
+function addRate(g){ S.rateBuf.push([Date.now(),g]); pruneRate(); try{ if(g&&g>0) questProgress("gold",g); }catch(e){} }
 function pruneRate(){
   const now=Date.now();
   S.rateBuf=S.rateBuf.filter(e=>now-e[0]<60000);
@@ -922,6 +1026,7 @@ function onTap(ev){
     if(M.hp<=0){ M.hp=0; killReward(); }
   }
   shake=Math.max(shake,0.12); S.tapsDone++;
+  try{ questProgress("tap",1); if(!S.ach.first_tap) checkAchievement("first_tap"); if(S.tapsDone>=1000) checkAchievement("tap_1000"); }catch(e){}
   for(let i=0;i<4;i++) parts.push({x,y,vx:(Math.random()-0.5)*140,vy:-Math.random()*160,l:0.5,c:"#ffd75e"});
   sfxTap(); if(mult>1) sfxKontra();
   haptic("impact", mult>1?"medium":"light");
@@ -1622,7 +1727,7 @@ function renderList(){
           <div class="st">${q.desc} — ${q.prog}/${q.target}</div>
           <div class="st">👻 ${q.reward.souls||0}  💰 ${q.reward.gold||0}${q.reward.don||0?(" 💎 "+q.reward.don):""}</div>
         </div>
-        ${claimed?"<button class=\"buy\" disabled>✔</button>":done?buyBtn("🎁 ЗАБРАТЬ",true,"claimQuest_"+i):"<button class=\"buy\" disabled>В progresse</button>"}
+        ${claimed?"<button class=\"buy\" disabled>✔</button>":done?buyBtn("🎁 ЗАБРАТЬ",true,"claimQuest_"+i):"<button class=\"buy\" disabled>⏳ В процессе</button>"}
       </div>`;
     });
     content.innerHTML=h;
@@ -1640,11 +1745,12 @@ function attachDelegated(){
       }
       else if(f.startsWith("buyHero")){
         const i=+f.slice(7), c=heroCost(i);
-        if(S.gold>=c){ S.gold-=c; S.heroLvl[i]++; heroFx(i); sfxBuy(); haptic("impact","medium"); }
+        if(S.gold>=c){ S.gold-=c; S.heroLvl[i]++; heroFx(i); sfxBuy(); haptic("impact","medium"); checkAchievement("first_hero"); }
       }
       else if(f.startsWith("buyShop_")){
         const type=f.slice(10), cost={tap:30,dps:75,boss:150}[type];
-        if(S.don>=cost&&!S.shop[type]){ S.don-=cost; S.shop[type]=true; sfxBuy(); haptic("notify","success"); renderList(); }
+        if(S.don>=cost&&!S.shop[type]){ S.don-=cost; S.shop[type]=true; sfxBuy(); haptic("notify","success"); renderList();
+          if(S.shop.tap&&S.shop.dps&&S.shop.boss) checkAchievement("shop_all"); }
       }
       else if(f.startsWith("buyTal_")){
         const key=f.slice(7), nd=TALENTS[key].nodes[S.tQty[key]];
@@ -1664,6 +1770,8 @@ function attachDelegated(){
           S.floor=1; S.runBest=1; S.gold=0; S.tapLvl=0;
           S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0]; S.clownB=0; S.breathT=0; S.pity=0; M.info=null;
           spawnFloor(); sfxPrestige(); haptic("notify","success");
+          if(S.par===1) checkAchievement("first_prestige");
+          if(S.par>=3) checkAchievement("prestige_3");
           ded(`Кредо забрал данж и отсчитал ${g} душ. Парагон +1 (всего ${S.par}), кристаллов: ${S.don}. «Приятного бизнеса», — проскрипел он.`);
           save(); refreshHud();
         }
