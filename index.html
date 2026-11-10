@@ -165,20 +165,20 @@ const PAR_CORRUPTION_REDUCE=0.0015; // −0.15% коррупции за уров
 const H_GROW=1.15, H_COST=1.075, T_GROW=1.65, T_COST=1.07;
 /* ================= ДНЕВНЫЕ КВЕСТЫ ================= */
 const QUEST_TYPES=[
-  {nm:"Убей боссов", desc:"Повергни боссов на кульминациях этажей", type:"boss", target:3, reward:{souls:3,don:0,gold:500}},
-  {nm:"Тапни раз", desc:"Сделай 50 тапов по монстру", type:"tap", target:50, reward:{souls:2,don:0,gold:300}},
-  {nm:"Пройди этажи", desc:"Дойди до N-го этажа", type:"floor", target:5, reward:{souls:5,don:1,gold:1000}},
-  {nm:"Выиграй рейды", desc:"Побеждай в рейдах", type:"raid", target:2, reward:{souls:4,don:0,gold:700}},
-  {nm:"Собери золота", desc:"Накопи N золота", type:"gold", target:10000, reward:{souls:2,don:0,gold:0}},
+  {nm:"Убей боссов", desc:"Повергни боссов на кульминациях этажей", type:"boss", target:3, reward:{pwr:3,don:0}},
+  {nm:"Тапни раз", desc:"Сделай 50 тапов по монстру", type:"tap", target:50, reward:{pwr:2,don:0}},
+  {nm:"Пройди этажи", desc:"Дойди до N-го этажа", type:"floor", target:5, reward:{pwr:5,don:1}},
+  {nm:"Выиграй рейды", desc:"Побеждай в рейдах", type:"raid", target:2, reward:{pwr:4,don:0}},
+  {nm:"Собери золота", desc:"Накопи N золота", type:"gold", target:10000, reward:{pwr:2,don:0}},
 ];
 /* недельные квесты: цели крупнее, награды жирнее — сброс раз в неделю */
 const QUEST_WEEK=[
-  {nm:"Мясная неделя",     desc:"Поверги 15 боссов",      type:"boss", target:15,    reward:{souls:12,don:2}},
-  {nm:"Палец-марафонец",   desc:"Сделай 500 тапов",       type:"tap",  target:500,   reward:{souls:8, don:1}},
-  {nm:"Лестничный марафон",desc:"Пройди 25 новых этажей", type:"floor",target:25,    reward:{souls:15,don:2}},
-  {nm:"Рейдовый волк",     desc:"Выиграй 10 рейдов",      type:"raid", target:10,    reward:{souls:10,don:2}},
-  {nm:"Золотая жила",      desc:"Собери 150 000 золота",  type:"gold", target:150000,reward:{souls:8, don:1}},
-  {nm:"Кулак тыквы",       desc:"Убей босса своего клана",type:"clan", target:1,     reward:{souls:10,don:3}},
+  {nm:"Мясная неделя",     desc:"Поверги 15 боссов",      type:"boss", target:15,    reward:{pwr:12,don:2}},
+  {nm:"Палец-марафонец",   desc:"Сделай 500 тапов",       type:"tap",  target:500,   reward:{pwr:8, don:1}},
+  {nm:"Лестничный марафон",desc:"Пройди 25 новых этажей", type:"floor",target:25,    reward:{pwr:15,don:2}},
+  {nm:"Рейдовый волк",     desc:"Выиграй 10 рейдов",      type:"raid", target:10,    reward:{pwr:10,don:2}},
+  {nm:"Золотая жила",      desc:"Собери 150 000 золота",  type:"gold", target:150000,reward:{pwr:8, don:1}},
+  {nm:"Кулак тыквы",       desc:"Убей босса своего клана",type:"clan", target:1,     reward:{pwr:10,don:3}},
 ];
 function dayIdx_q(){ return Math.floor(Date.now()/864e5); }
 function genQuests(){
@@ -220,42 +220,43 @@ function claimQuest(qIdx, weekly){
   const q=bag.list[qIdx];
   if(!q||!q.done||bag.claimed.includes(qIdx)) return;
   bag.claimed.push(qIdx);
-  S.souls+=q.reward.souls||0; S.don+=q.reward.don||0; S.gold+=q.reward.gold||0;
-  ded((weekly?"📅 Недельный":"📋 Дневной")+" квест: «"+q.nm+"» — +" + (q.reward.souls||0) + " 👻, +" + (q.reward.gold||0) + " 💰" + (q.reward.don||0?(" +"+q.reward.don+" 💎"):""));
+  const g=q.reward.pwr?goldReward(q.reward.pwr):(q.reward.gold||0);
+  S.gold+=g; S.don+=q.reward.don||0;
+  ded((weekly?"📅 Недельный":"📋 Дневной")+" квест: «"+q.nm+"» — +"+fmt(g)+" 💰"+(q.reward.don?(" +"+q.reward.don+" 💎"):""));
   save(); renderList(); refreshHud();
 }
 
 /* ================= ДОСТИЖЕНИЯ (книга в HUD, бестиарий внутри) ================= */
 const ACHIEVEMENTS=[
-  {id:"first_hero",    nm:"Первый наём",    desc:"Найми любого героя",            icon:"🛡", reward:{souls:2}},
-  {id:"clan_join",     nm:"Свой в доску",   desc:"Вступи в любой клан",           icon:"🏰", reward:{gold:1000}},
-  {id:"clan_boss",     nm:"Ревизор",        desc:"Убей босса клана штурмом",      icon:"👹", reward:{don:3}},
-  {id:"shop_all",      nm:"Покупатель",     desc:"Купи все 3 усиления в ЛАВКЕ",   icon:"💎", reward:{souls:10}},
+  {id:"first_hero",    nm:"Первый наём",    desc:"Найми любого героя",            icon:"🛡", reward:{pwr:2,don:1}},
+  {id:"clan_join",     nm:"Свой в доску",   desc:"Вступи в любой клан",           icon:"🏰", reward:{pwr:5,don:0}},
+  {id:"clan_boss",     nm:"Ревизор",        desc:"Убей босса клана штурмом",      icon:"👹", reward:{pwr:0,don:3}},
+  {id:"shop_all",      nm:"Покупатель",     desc:"Купи все 3 усиления в ЛАВКЕ",   icon:"💎", reward:{pwr:8,don:2}},
 ];
 /* 📶 Прогрессивные достижения: лестницы ступеней. S.prog[key] = сколько ступеней засчитано */
 const PROG={
   tap:      {nm:"Палец-молот",     icon:"✊", unit:"тапов",
-             tiers:[ {n:1,nm:"1 тап",r:{souls:1}},{n:10,nm:"10 тапов",r:{souls:2}},{n:100,nm:"100 тапов",r:{souls:4}},
-                     {n:1000,nm:"1000 тапов",r:{souls:8,don:1}},{n:10000,nm:"10K тапов",r:{souls:15,don:2}},{n:100000,nm:"100K тапов",r:{souls:30,don:4}} ],
+             tiers:[ {n:1,nm:"1 тап",r:{pwr:2,don:0}},{n:10,nm:"10 тапов",r:{pwr:3,don:0}},{n:100,nm:"100 тапов",r:{pwr:5,don:0}},
+                     {n:1000,nm:"1000 тапов",r:{pwr:8,don:1}},{n:10000,nm:"10K тапов",r:{pwr:12,don:2}},{n:100000,nm:"100K тапов",r:{pwr:20,don:4}} ],
              get:()=>S.tapsDone||0},
   boss:     {nm:"Мясорубка",       icon:"☠", unit:"боссов",
-             tiers:[ {n:1,nm:"1 босс",r:{souls:1}},{n:10,nm:"10 боссов",r:{souls:4}},{n:50,nm:"50 боссов",r:{souls:10,don:1}},{n:200,nm:"200 боссов",r:{souls:25,don:3}} ],
+             tiers:[ {n:1,nm:"1 босс",r:{pwr:2,don:0}},{n:10,nm:"10 боссов",r:{pwr:4,don:0}},{n:50,nm:"50 боссов",r:{pwr:7,don:1}},{n:200,nm:"200 боссов",r:{pwr:12,don:3}} ],
              get:()=>S.bossKills||0},
   floor:    {nm:"Скалолаз",        icon:"🏰", unit:"этажей",
-             tiers:[ {n:10,nm:"10 этажей",r:{souls:2}},{n:25,nm:"25 этажей",r:{souls:3}},{n:50,nm:"50 этажей",r:{souls:5}},
-                     {n:100,nm:"100 этажей",r:{souls:10,don:1}},{n:200,nm:"200 этажей",r:{souls:20,don:5}},{n:500,nm:"500 этажей",r:{souls:50,don:10}} ],
+             tiers:[ {n:10,nm:"10 этажей",r:{pwr:2,don:0}},{n:25,nm:"25 этажей",r:{pwr:3,don:0}},{n:50,nm:"50 этажей",r:{pwr:5,don:0}},
+                     {n:100,nm:"100 этажей",r:{pwr:8,don:1}},{n:200,nm:"200 этажей",r:{pwr:12,don:3}},{n:500,nm:"500 этажей",r:{pwr:20,don:6}} ],
              get:()=>S.floorTop||0},
   raid:     {nm:"Рейдер",          icon:"⚔", unit:"рейдов",
-             tiers:[ {n:1,nm:"1 победа",r:{gold:2000}},{n:5,nm:"5 побед",r:{souls:3}},{n:10,nm:"10 побед",r:{souls:6,don:1}},
-                     {n:25,nm:"25 побед",r:{souls:15,don:2}},{n:50,nm:"50 побед",r:{souls:30,don:4}} ],
+             tiers:[ {n:1,nm:"1 победа",r:{pwr:2,don:0}},{n:5,nm:"5 побед",r:{pwr:4,don:0}},{n:10,nm:"10 побед",r:{pwr:7,don:1}},
+                     {n:25,nm:"25 побед",r:{pwr:12,don:3}},{n:50,nm:"50 побед",r:{pwr:20,don:5}} ],
              get:()=>S.raidWins||0},
   bestiary: {nm:"Охотник",         icon:"📚", unit:"монстров",
-             tiers:[ {n:3,nm:"3 монстра",r:{souls:3}},{n:10,nm:"10 монстров",r:{souls:8,don:2}},
-                     {n:25,nm:"25 монстров",r:{souls:15,don:3}},{n:60,nm:"60 монстров",r:{souls:30,don:5}} ],
+             tiers:[ {n:3,nm:"3 монстра",r:{pwr:2,don:0}},{n:10,nm:"10 монстров",r:{pwr:4,don:1}},
+                     {n:25,nm:"25 монстров",r:{pwr:7,don:2}},{n:60,nm:"60 монстров",r:{pwr:12,don:4}} ],
              get:()=>S.bestiary||0},
   prestige: {nm:"Продавец данжей", icon:"👻", unit:"престижей",
-             tiers:[ {n:1,nm:"1 престиж",r:{don:5}},{n:3,nm:"3 престижа",r:{souls:15,don:5}},
-                     {n:5,nm:"5 престижей",r:{souls:30,don:8}},{n:10,nm:"10 престижей",r:{souls:60,don:15}} ],
+             tiers:[ {n:1,nm:"1 престиж",r:{pwr:3,don:5}},{n:3,nm:"3 престижа",r:{pwr:5,don:5}},
+                     {n:5,nm:"5 престижей",r:{pwr:10,don:8}},{n:10,nm:"10 престижей",r:{pwr:20,don:15}} ],
              get:()=>S.par||0},
 };
 function roman(n){ const R=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"]; return R[n-1]||String(n); }
@@ -263,9 +264,8 @@ function progCount(){ let n=0; for(const k in (S.prog||{})) n+=S.prog[k]||0; ret
 function progTotal(){ let n=0; for(const k in PROG) n+=PROG[k].tiers.length; return n; }
 function progRewardTxt(reward){
   const parts=[];
-  if(reward.souls) parts.push("+"+reward.souls+" 👻");
-  if(reward.don)   parts.push("+"+reward.don+" 💎");
-  if(reward.gold)  parts.push("+"+fmt(reward.gold)+" 💰");
+  if(reward.pwr) parts.push("+"+fmt(goldReward(reward.pwr))+" 💰");
+  if(reward.don) parts.push("+"+reward.don+" 💎");
   return parts.join(" ");
 }
 /* Проверка лестниц (всех или одной): выдаёт заслуженные ступени. Вызывать после роста метрики */
@@ -280,7 +280,7 @@ function checkProg(only){
       const t=L.tiers[cur-1];
       S.prog[key]=cur;
       S.achNew=(S.achNew||0)+1; // 🔴 новая ступень — бейдж на книге
-      S.souls+=t.r.souls||0; S.don+=t.r.don||0; S.gold+=t.r.gold||0;
+      S.gold+=goldReward(t.r.pwr||0); S.don+=t.r.don||0; // 💰 награды без душ: души только за престиж
       ded("🏆 "+L.icon+" "+L.nm+" "+roman(cur)+": "+t.nm+" — "+(progRewardTxt(t.r)||"молодец"));
       try{ sfxWin(); }catch(e){}
       granted=true;
@@ -296,9 +296,9 @@ function checkAchievement(id){
   S.ach[id]=true;
   S.achNew=(S.achNew||0)+1; // 🔴 непросмотренное достижение — бейдж на книге
   const r=a.reward||{};
-  S.souls+=r.souls||0; S.don+=r.don||0; S.gold+=r.gold||0;
+  S.gold+=goldReward(r.pwr||0)+(r.gold||0); S.don+=r.don||0;
   const parts=[];
-  if(r.souls) parts.push("+"+r.souls+" 👻");
+  if(r.pwr)   parts.push("+"+fmt(goldReward(r.pwr))+" 💰");
   if(r.don)   parts.push("+"+r.don+" 💎");
   if(r.gold)  parts.push("+"+fmt(r.gold)+" 💰");
   ded(parts.length ? ("🏆 Достижение: «"+a.nm+"» — "+parts.join(" ")) : ("🏆 Достижение: «"+a.nm+"»"));
@@ -440,6 +440,13 @@ function load(){
   const LEGACY_MAP={first_tap:["tap",1],tap_1000:["tap",4],boss_slayer:["boss",2],floor_50:["floor",3],floor_100:["floor",4],floor_200:["floor",5],raid_win:["raid",2],bestiary_3:["bestiary",1],bestiary_10:["bestiary",2],first_prestige:["prestige",1],prestige_3:["prestige",2]};
   for(const id in LEGACY_MAP) if(S.ach && S.ach[id]){ const m=LEGACY_MAP[id]; if(S.prog[m[0]]<m[1]) S.prog[m[0]]=m[1]; }
   if(S.buyQty!=="max" && S.buyQty!==1 && S.buyQty!==10 && S.buyQty!==100) S.buyQty=1; // 🛒 корректные значения
+  // квесты старого формата: души в наградах → сила награды (💰/💎); души теперь платит только Кредо
+  ["quests","wquests"].forEach(k=>(S[k]&&S[k].list||[]).forEach(q=>{
+    if(q.reward && ("souls" in q.reward)){
+      const p=(q.reward.souls||0)+((q.reward.gold||0)>0?Math.max(1,Math.round(q.reward.gold/goldReward(1))):0);
+      q.reward={pwr:p, don:q.reward.don||0};
+    }
+  }));
   if(typeof S.raidWins!=="number") S.raidWins=0;
   if(typeof S.bossKills!=="number") S.bossKills=0;
   // оффлайн-башня: реальный автобой через этажи с кульминациями каждые 10 этажей (макс 8 ч)
@@ -658,6 +665,13 @@ function goldMulti(){
   if(clanBuff("gold")) g*=1.05;
   return g;
 }
+
+/* 💰 Конвертер наград: души дают только перерождения (Кредо), квесты/достижения платят 💰 и 💎 */
+function goldReward(pwr){
+  if(!pwr) return 0;
+  const f=Math.max(1,Math.min(S.floorTop||1,999));
+  return Math.max(100, Math.round(3*Math.pow(1.15,f-1)*12*pwr*goldMulti())); // ~дюжина убийств с этажа за «пай»
+}
 function heroDps(i){ return HEROES[i].base*Math.pow(H_GROW,Math.max(0,S.heroLvl[i]-1))*legMulti(); }
 function heroCost(i){ return HEROES[i].unlock*Math.pow(H_COST,S.heroLvl[i])*heroDiscount(); }
 
@@ -808,7 +822,7 @@ const achCloseEl=document.getElementById("achClose");
 const achContentEl=document.getElementById("achContent");
 function achRewardTxt(r){
   const p=[];
-  if(r.souls) p.push("+"+r.souls+" 👻");
+  if(r.pwr) p.push("+"+fmt(goldReward(r.pwr))+" 💰");
   if(r.don) p.push("+"+r.don+" 💎");
   if(r.gold) p.push("+"+fmt(r.gold)+" 💰");
   return p.join(" · ")||"—";
@@ -1097,12 +1111,12 @@ function clanBossDmgHit(){
   return totalDps(false)*20*(clanBuff("boss")?1.3:1);
 }
 function giveClanChest(silent){
-  const loot=Math.floor((3*Math.pow(1.15,Math.max(S.runBest,10)-1))*45*goldMulti());
-  S.gold+=loot; S.souls+=2; S.glory+=50; addRate(loot);
+  const loot=Math.floor((3*Math.pow(1.15,Math.max(S.runBest,10)-1))*52*goldMulti()); // 🏰 в сундуке золото (щедрее взамен душ)
+  S.gold+=loot; S.glory+=50; addRate(loot);
   S.clan.chest=0; save(); refreshHud();
   if(!silent){
     bigBurst(); sfxWin(); haptic("notify","success");
-    ded("⚔ Клан сбил босса! Твой честный пай: "+fmt(loot)+" 💰, 2 👻 и 50 Славы.");
+    ded("⚔ Клан сбил босса! Твой честный пай: "+fmt(loot)+" 💰 и 50 Славы.");
     checkAchievement("clan_boss");
     renderList();
   }
@@ -1789,6 +1803,7 @@ function renderList(){
       <div class="nm">🧟 СИЛА НАСЛЕДНИКА</div>
       <div class="st">🗡 тап ×${fmtE(tapE)} · 🛡 герои ×${fmtE(legE)} · 💰 золото ×${fmtE(marE)}</div>
       <div class="st small">Парагон: ${S.par} → герои +${S.par*5}% DPS${best?(" · 📚 бестиарий: +"+best*2+"% золота"):""}${corr.active?(" · ⚠ коррупция: моб ×"+fmtE(corr.hpMult)+", урон ×"+fmtE(corr.dpsMult)):""}</div>
+      <div class="st small">💸 Души платит только Кредо за перерождение. Квесты и достижения платят 💰 и 💎.</div>
     </div></div>
     <button id="prestigeBtn" ${can?"":"disabled"} data-fn="prestige">
       ${can?`👻 ПРОДАТЬ ДАНЖ КРЕДО — ДУШ × ${fmt(soulsGain())}${S.firstPrestige?"":" (×2 первый раз!)"}`:"👻 Престиж с 20-го этажа (ты на "+S.floor+")"}
@@ -1973,7 +1988,7 @@ function renderList(){
           <div style="margin:4px 0 3px; height:8px; background:#15101e; border:1px solid #352a5e; border-radius:4px; overflow:hidden;">
             <div style="height:100%; width:${pct}%; background:${pct>=100?"#5f9e46":"#e0a330"};"></div>
           </div>
-          <div class="st">✅ ${fmt(q.prog)} / ${fmt(q.target)}   ·   👻 ${q.reward.souls||0}${q.reward.gold?("   💰 "+fmt(q.reward.gold)):""}${q.reward.don?("   💎 "+q.reward.don):""}</div>
+          <div class="st">✅ ${fmt(q.prog)} / ${fmt(q.target)}   ·   💰 ${fmt(goldReward(q.reward.pwr||0))}${q.reward.don?("   💎 "+q.reward.don):""}</div>
         </div>
         ${claimed?"<button class=\"buy\" disabled>✔</button>":done?buyBtn("🎁 ЗАБРАТЬ",true,(weekly?"claimwQuest_":"claimQuest_")+i):"<button class=\"buy\" disabled>⏳ В процессе</button>"}
       </div>`;
