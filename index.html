@@ -394,7 +394,7 @@ function freshState(){
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
     wquests:{wk:0, list:[], claimed:[], genT:0}, // 📅 недельные квесты
-    ach:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, // 🏆 достижения, лестницы и счётчики
+    ach:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, // 🏆 достижения, лестницы, 🛒 прокачка ×N
   };
 }
 let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
@@ -439,6 +439,7 @@ function load(){
   // миграция старых статических ачивок в ступени лестниц (всё заработанное сохраняется)
   const LEGACY_MAP={first_tap:["tap",1],tap_1000:["tap",4],boss_slayer:["boss",2],floor_50:["floor",3],floor_100:["floor",4],floor_200:["floor",5],raid_win:["raid",2],bestiary_3:["bestiary",1],bestiary_10:["bestiary",2],first_prestige:["prestige",1],prestige_3:["prestige",2]};
   for(const id in LEGACY_MAP) if(S.ach && S.ach[id]){ const m=LEGACY_MAP[id]; if(S.prog[m[0]]<m[1]) S.prog[m[0]]=m[1]; }
+  if(S.buyQty!=="max" && S.buyQty!==1 && S.buyQty!==10 && S.buyQty!==100) S.buyQty=1; // 🛒 корректные значения
   if(typeof S.raidWins!=="number") S.raidWins=0;
   if(typeof S.bossKills!=="number") S.bossKills=0;
   // оффлайн-башня: реальный автобой через этажи с кульминациями каждые 10 этажей (макс 8 ч)
@@ -638,16 +639,18 @@ function waveInfo(f,w){
   return {kind:"guard", hp:monsterBase(f)*1.5*corruptionState().hpMult, gold:3*Math.pow(1.15,f-1)*1.4, name:"Страж этажа"};
 }
 function tapDmg(){
-  let m=Math.pow(1.25,S.tQty.tap)*Math.pow(1.5,Math.max(0,S.tQty.tap-1))*(S.tQty.tap>=4?2:1);
+  let m=talMulti("tap");
   if(clownOn()) m*=2;                           // «Клоунада»: тап ×2
   m*=1+Math.min(9,(S.tapStacks||0)*0.01);       // Мясник: +1% за тап (кап ×10)
   if(S.shop.tap) m*=2;                          // Магазин: тап ×2
   return Math.pow(T_GROW,S.tapLvl)*m;
 }
+/* 📶 эффект ветки талантов (сырой множитель, без внешних баффов) */
+function talMulti(key){ const n=S.tQty[key]; return Math.pow(1.25,n)*Math.pow(1.5,Math.max(0,n-1))*(n>=4?2:1); }
 function heroDiscount(){ return S.tQty.leg>=3 ? 0.85 : 1; }
-function legMulti(){ return Math.pow(1.25,S.tQty.leg)*Math.pow(1.5,Math.max(0,S.tQty.leg-1))*(S.tQty.leg>=4?2:1); }
+function legMulti(){ return talMulti("leg"); }
 function goldMulti(){
-  let g=Math.pow(1.25,S.tQty.mar)*Math.pow(1.5,Math.max(0,S.tQty.mar-1))*(S.tQty.mar>=4?2:1);
+  let g=talMulti("mar");
   g*=(1+(S.bestiary||0)*0.02);
   if(S.heroLvl&&S.heroLvl[0]>=25) g*=1.10;      // Слизень 25: +10% золота
   if(S.heroLvl&&S.heroLvl[10]>=25) g*=5;        // Тёмный Управляющий 25: золото ×5
@@ -657,6 +660,38 @@ function goldMulti(){
 }
 function heroDps(i){ return HEROES[i].base*Math.pow(H_GROW,Math.max(0,S.heroLvl[i]-1))*legMulti(); }
 function heroCost(i){ return HEROES[i].unlock*Math.pow(H_COST,S.heroLvl[i])*heroDiscount(); }
+
+/* 🛒 Покупки ×1/×10/×100/MAX: цена пачки = сумма геометрической прогрессии */
+function geoPrice(r,c1,n){ return c1*(Math.pow(r,n)-1)/(r-1); }
+function geoPlan(r,c1){ // MAX: сколько уровней можно купить тут же
+  return Math.max(0,Math.min(1000,Math.floor(Math.log(1+S.gold*(r-1)/c1)/Math.log(r))));
+}
+function tapPlan(){
+  const c1=tapCost(), r=T_COST;
+  const n=S.buyQty==="max"?geoPlan(r,c1):S.buyQty;
+  return {n,total:geoPrice(r,c1,n||1)};
+}
+function heroPlan(i){
+  const c1=heroCost(i), r=H_COST;
+  const n=S.buyQty==="max"?geoPlan(r,c1):S.buyQty;
+  return {n,total:geoPrice(r,c1,n||1)};
+}
+function talPlan(key){ // узлы талантов стоят по-разному: считаем сколько подряд потянем
+  const nodes=TALENTS[key].nodes, n=S.tQty[key];
+  const want=S.buyQty==="max"?1e9:S.buyQty;
+  let total=0,k=0;
+  while(n+k<nodes.length && k<want && total+nodes[n+k].c<=S.souls){ total+=nodes[n+k].c; k++; }
+  return {k,total};
+}
+/* 🛒 сам переключатель: ставится над разделами покупки */
+function qtyBar(){
+  return [1,10,100,"max"].map(q=>
+    "<button data-qty='"+q+"' style='flex:1 1 0; padding:7px 2px; font-weight:bold; font-size:12px; cursor:pointer;"
+    +"color:"+(S.buyQty===q?"#ffd75e":"#9a92c0")+"; background:"+(S.buyQty===q?"#26203f":"#1d1830")+";"
+    +"border:1px solid "+(S.buyQty===q?"#7a5c14":"#352a5e")+"; border-radius:8px;'>"
+    +(q==="max"?"MAX":"×"+q)+"</button>").join("");
+}
+function qtyBarWrap(){ return "<div style='display:flex; gap:4px; margin-bottom:8px;'>"+qtyBar()+"</div>"; }
 function tapCost(){ return 25*Math.pow(T_COST,S.tapLvl); }
 function bloodSynergy(){ return S.heroLvl[0]>=25 && S.heroLvl[3]>=25; }              // «Кровопийцы»
 function clownOn(){ return S.heroLvl[1]>=50 && S.heroLvl[7]>=50; }                   // «Клоунада»
@@ -1704,18 +1739,19 @@ function buyBtn(txt,enabled,fn){
 }
 function renderList(){
   if(curTab==="tap"){
-    content.innerHTML=`
+    const p=tapPlan();
+    content.innerHTML=qtyBarWrap()+`
       <div class="card">
         <div class="info">
           <div class="nm">Кулак Крушителя ур.${S.tapLvl+1}</div>
           <div class="st">Тап-урон: ${fmt(tapDmg())} | Герои DPS: ${fmt(totalDps(M.info&&M.info.kind==="boss"))}</div>
           <div class="st small">5 быстрых тапов → 6-й бьёт ×3 («Контроша»)</div>
         </div>
-        ${buyBtn("💰 "+fmt(tapCost()), S.gold>=tapCost(), "buyTap")}
+        ${buyBtn("💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""), p.n>0&&S.gold>=p.total, "buyTap")}
       </div>`;
   }
   if(curTab==="heroes"){
-    let h=`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. На 25 ур у героя открывается умение (у части — усиленное на 50).</div>`;
+    let h=qtyBarWrap()+`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. На 25 ур у героя открывается умение (у части — усиленное на 50). MAX покупает, сколько потянеш.</div>`;
     HEROES.forEach(hr=>{
       const l=S.heroLvl[hr.id], cost=heroCost(hr.id), dps=l?fmt(heroDps(hr.id)):0;
       const bossTag=(hr.id===2&&l>=25)?(((wallOn())||l>=50)?" | ×3 по боссам":" | ×2 по боссам"):"";
@@ -1728,7 +1764,7 @@ function renderList(){
           <div class="st">${l?("DPS: "+dps):("найм за "+fmt(hr.unlock)+" золота")}${bossTag}${blood}${lichPic}${prU}</div>
           <div class="st small">${HERO_SK[hr.id]}</div>
         </div>
-        ${buyBtn("💰 "+fmt(cost), S.gold>=cost, "buyHero"+hr.id)}
+        ${buyBtn("💰 "+fmt(heroPlan(hr.id).total)+(heroPlan(hr.id).n>1?" ×"+heroPlan(hr.id).n:""), heroPlan(hr.id).n>0&&S.gold>=heroPlan(hr.id).total, "buyHero"+hr.id)}
       </div>`;
     });
     h+=`<h3 class="sec">🔗 СВЯЗКИ</h3>`;
@@ -1744,18 +1780,35 @@ function renderList(){
   }
   if(curTab==="souls"){
     const can=S.floor>=20;
-    let h=`<button id="prestigeBtn" ${can?"":"disabled"} data-fn="prestige">
-        ${can?`👻 ПРОДАТЬ ДАНЖ КРЕДО — ДУШ × ${fmt(soulsGain())}${S.firstPrestige?"":" (×2 первый раз!)"}`:"👻 Престиж с 20-го этажа (ты на "+S.floor+")"}
-      </button>
-      <div class="small" style="margin:4px 0 8px">Сброс: этажи, монеты, герои, кулак. Души и древо остаются навсегда.</div>`;
+    const tapE=talMulti("tap"), legE=talMulti("leg"), marE=talMulti("mar");
+    const best=+(S.bestiary||0);
+    const corr=corruptionState();
+    const fmtE=x=>x>=100?fmt(Math.round(x)):(Math.round(x*100)/100).toFixed(2);
+    let h=qtyBarWrap();
+    h+=`<div class="card"><div class="info">
+      <div class="nm">🧟 СИЛА НАСЛЕДНИКА</div>
+      <div class="st">🗡 тап ×${fmtE(tapE)} · 🛡 герои ×${fmtE(legE)} · 💰 золото ×${fmtE(marE)}</div>
+      <div class="st small">Парагон: ${S.par} → герои +${S.par*5}% DPS${best?(" · 📚 бестиарий: +"+best*2+"% золота"):""}${corr.active?(" · ⚠ коррупция: моб ×"+fmtE(corr.hpMult)+", урон ×"+fmtE(corr.dpsMult)):""}</div>
+    </div></div>
+    <button id="prestigeBtn" ${can?"":"disabled"} data-fn="prestige">
+      ${can?`👻 ПРОДАТЬ ДАНЖ КРЕДО — ДУШ × ${fmt(soulsGain())}${S.firstPrestige?"":" (×2 первый раз!)"}`:"👻 Престиж с 20-го этажа (ты на "+S.floor+")"}
+    </button>
+    <div class="small" style="margin:4px 0 8px">Продажа данжа: сброс этажей, монет, героев и кулака. Души, древо и парагон остаются.</div>`;
     for(const key of ["tap","leg","mar"]){
       const t=TALENTS[key], n=S.tQty[key];
-      h+=`<h3 class="sec">${t.nm} (${n}/${t.nodes.length})</h3>`;
-      t.nodes.forEach((nd,i)=>{
-        if(i<n) h+=`<div class="tal done"><span>${nd.d}</span><button class="buy" disabled>✔</button></div>`;
-        else if(i===n) h+=`<div class="tal"><span>${nd.d}</span>${buyBtn("👻 "+nd.c, S.souls>=nd.c, "buyTal_"+key)}</div>`;
-        else h+=`<div class="tal"><span class="small">🔒 дальше</span></div>`;
-      });
+      const maxed=n>=t.nodes.length;
+      const nd=maxed?null:t.nodes[n];
+      const p=talPlan(key);
+      const effTxt={tap:"тап ×",leg:"герои ×",mar:"золото ×"}[key];
+      const dots=t.nodes.map((x,i)=>"<span style='display:inline-block; width:9px; height:9px; margin:0 2px; border-radius:2px; background:"+(i<n?"#ffd75e":"#2a2148")+";'></span>").join("");
+      h+=`<div class="card ${maxed?"owned":""}">
+        <div class="info">
+          <div class="nm">${t.nm} <span class="small">${n}/${t.nodes.length}</span></div>
+          <div class="st">${effTxt}${fmtE(talMulti(key))}${nd?(" → «"+nd.d+"»"):" — ветка выучена"}</div>
+          <div class="st small">${dots}</div>
+        </div>
+        ${maxed?"<button class=\"buy\" disabled>✔ ВСЁ</button>":buyBtn("👻 "+fmt(p.total||nd.c)+(p.k>1?" ×"+p.k:""), p.k>0, "buyTal_"+key)}
+      </div>`;
     }
     content.innerHTML=h;
   }
@@ -1955,6 +2008,9 @@ function renderList(){
       el.onclick=()=>{ questTab=el.getAttribute("data-qtab"); haptic("select"); renderList(); };
     });
   }
+  content.querySelectorAll("[data-qty]").forEach(el=>{
+    el.onclick=()=>{ const v=el.getAttribute("data-qty"); S.buyQty=(v==="max")?"max":+v; haptic("select"); save(); renderList(); };
+  });
   attachDelegated();
   refreshHud();
 }
@@ -1963,12 +2019,12 @@ function attachDelegated(){
     b.onclick=()=>{
       const f=b.dataset.fn;
       if(f==="buyTap"){
-        const c=tapCost();
-        if(S.gold>=c){ S.gold-=c; S.tapLvl++; tapFx(); sfxBuy(); haptic("impact","medium"); }
+        const p=tapPlan();
+        if(p.n>0&&S.gold>=p.total){ S.gold-=p.total; S.tapLvl+=p.n; tapFx(); sfxBuy(); haptic("impact","medium"); }
       }
       else if(f.startsWith("buyHero")){
-        const i=+f.slice(7), c=heroCost(i);
-        if(S.gold>=c){ S.gold-=c; S.heroLvl[i]++; heroFx(i); sfxBuy(); haptic("impact","medium"); checkAchievement("first_hero"); }
+        const i=+f.slice(7), p=heroPlan(i);
+        if(p.n>0&&S.gold>=p.total){ S.gold-=p.total; S.heroLvl[i]+=p.n; heroFx(i); sfxBuy(); haptic("impact","medium"); checkAchievement("first_hero"); }
       }
       else if(f.startsWith("buyShop_")){
         const type=f.slice(10), cost={tap:30,dps:75,boss:150}[type];
@@ -1976,8 +2032,8 @@ function attachDelegated(){
           if(S.shop.tap&&S.shop.dps&&S.shop.boss) checkAchievement("shop_all"); }
       }
       else if(f.startsWith("buyTal_")){
-        const key=f.slice(7), nd=TALENTS[key].nodes[S.tQty[key]];
-        if(nd&&S.souls>=nd.c){ S.souls-=nd.c; S.tQty[key]++; addFloat(CW/2,CH*0.3,"👻 ТАЛАНТ ↑",true); sfxBuy(); haptic("notify","success"); }
+        const key=f.slice(7), p=talPlan(key);
+        if(p.k>0){ S.souls-=p.total; S.tQty[key]+=p.k; addFloat(CW/2,CH*0.3,"👻 ТАЛАНТ ↑"+(p.k>1?" ×"+p.k:""),true); sfxBuy(); haptic("notify","success"); }
       }
       else if(f==="rollOpp"){ rollOpp(); haptic("select"); }
       else if(f==="startRaid"){ startRaid(); haptic("impact","heavy"); }
@@ -2064,12 +2120,9 @@ setInterval(()=>{
     if(curTab==="clan") renderList(); // обновлять таймеры
     content.querySelectorAll("button[data-fn]").forEach(b=>{
       const f=b.dataset.fn;
-      if(f==="buyTap") b.disabled=S.gold<tapCost();
-      else if(f.startsWith("buyHero")) b.disabled=S.gold<heroCost(+f.slice(7));
-      else if(f.startsWith("buyTal_")){
-        const nd=TALENTS[f.slice(7)].nodes[S.tQty[f.slice(7)]];
-        b.disabled=!nd||S.souls<nd.c;
-      }
+      if(f==="buyTap"){ const p=tapPlan(); b.disabled=p.n<1||S.gold<p.total; if(S.buyQty==="max") b.textContent="💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""); }
+      else if(f.startsWith("buyHero")){ const p=heroPlan(+f.slice(7)); b.disabled=p.n<1||S.gold<p.total; if(S.buyQty==="max") b.textContent="💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""); }
+      else if(f.startsWith("buyTal_")) b.disabled=talPlan(f.slice(7)).k<1;
       else if(f==="startRaid") b.disabled=RAID.active||S.torches<=0||S.floor<3;
       else if(f==="clanHit") b.disabled=RAID.active||S.torches<=0||S.clan.id<0||S.clan.hitsToday>=3||S.clan.bossHp<=0||S.floor<3;
       else if(f==="claimChest") b.disabled=!(S.clan.id>=0&&S.clan.chest);
