@@ -73,6 +73,7 @@
     <span id="floorLbl">Этаж 1</span>
     <span>💰 <b id="goldLbl">0</b></span>
     <span class="souls" id="soulsLbl">👻 0</span>
+    <span class="donate" id="donLbl">💎 0</span>
     <span id="restartBtn" style="cursor:pointer" title="С начала этажа (пересдача)">↺</span>
     <span id="muteBtn" style="cursor:pointer" title="Звук">🔊</span>
   </div>
@@ -91,6 +92,7 @@
       <button data-tab="souls">👻 ДУШИ</button>
       <button data-tab="raid">⚔ РЕЙД</button>
       <button data-tab="clan">🏰 КЛАН</button>
+      <button data-tab="shop">💎 ЛАВКА</button>
     </div>
     <div id="content"></div>
   </div>
@@ -128,6 +130,10 @@ const HERO_SK=[
  "25 ур: золото ×5",
  "25 ур: каждый тап +1% тап-урона навсегда",
 ];
+const MAX_FLOOR=20000; // потолок эпохи: этажи выше не генерируются
+const CORRUPTION_FLOOR=100; // с какого этажа начинается коррупция башни
+const CORRUPTION_PER_FLOOR=0.01; // +1% HP монстров за этаж выше порога
+const PAR_CORRUPTION_REDUCE=0.001; // −0.1% коррупции за уровень парагона
 const H_GROW=1.13, H_COST=1.085, T_GROW=1.65, T_COST=1.07;
 
 const TALENTS = {
@@ -154,6 +160,7 @@ const DED_IDLE = [
   "Этаж 5. Жилец жалуется, что тапать больно. Пусть терпит. — Д.К.",
   "🏰 В башне открыли КЛАНЫ: бафф, общий босс, лига. Вступишь — занесу тебя в зачёт по-тихому.",
   "🛡 В отряд приехали новички: Ведьма, Отшельник, Пингвин, Фитиль, Личь (я!), Управляющий и Мясник.",
+  "🏰 Коррупция башни начинается с 100-го этажа: монстры крепнут, а твой урон падает. Делай престиж — набирай парагонов, чтобы сломать проклятие.",
 ];
 const DED_CLAN = [
   "Босс клана подыхает сам, пока ты спишь. Круши для солидарности.",
@@ -182,8 +189,9 @@ function freshState(){
     tQty:{tap:0, leg:0, mar:0},
     pity:0, firstPrestige:false, tapsDone:0, wave:1, hintKontra:false, tutFlags:{},
     lastQuip:0, lastSeen:0, rateBuf:[], rate:0,
-    torches:3, glory:0, bestiary:0, lastTorchT:Date.now(),
+    torches:3, glory:0, bestiary:0, lastTorchT:Date.now(), lastOnline:Date.now(),
     opp:{n:"Рыцарь ЖЭК-3",t:1}, muted:false,
+    don:0, shop:{tap:false,dps:false,boss:false}, par:0, // 💎 донат, 🛒 магазин, парагоны
     clan:{id:-1, wk:0, pts:0, contrib:0, bossHp:0, bossMax:0,
       chest:0, hitsToday:0, day:0, lastSim:0},
   };
@@ -203,13 +211,27 @@ function load(){
   if(!S.tQty || typeof S.tQty!=="object") S.tQty={tap:0,leg:0,mar:0};
   if(!S.opp || typeof S.opp!=="object") S.opp={n:"Рыцарь ЖЭК-3",t:1};
   if(!Array.isArray(S.rateBuf)) S.rateBuf=[];
-  // оффлайн-доход: 60% в час, макс 8 ч
+  if(typeof S.don!=="number") S.don=0;
+  if(typeof S.par!=="number") S.par=0;
+  if(!S.shop || typeof S.shop!=="object") S.shop={tap:false,dps:false,boss:false};
+  if(S.shop.tap==null) S.shop.tap=false;
+  if(S.shop.dps==null) S.shop.dps=false;
+  if(S.shop.boss==null) S.shop.boss=false;
+  if(typeof S.lastOnline!=="number") S.lastOnline=Date.now();
+  // оффлайн-доход: 60% в час, макс 8 ч (автобой Башни Тысячи Этажей)
   const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
-  if(dt>30 && S.rate>0){
+  if(dt>30){
     const g = Math.floor(S.rate*dt*0.6);
-    if(g>0){ S.gold+=g;
-      setTimeout(()=>ded(`Пока тебя не было (${Math.ceil(dt/60)} мин), я потыкал киркой за тебя. Добыто: ${fmt(g)} 💰`), 1200);
-    }
+    const offlineFloors = Math.floor(dt/3600*10); // ~10 этажей в час оффлайн-боя
+    const offlineSouls = offlineFloors>0 ? Math.floor(Math.pow(Math.max(1,S.runBest)/8,1.25)*0.5*offlineFloors) : 0;
+    if(g>0){ S.gold+=g; }
+    if(offlineSouls>0){ S.souls+=offlineSouls; }
+    if(offlineFloors>0){ S.runBest = Math.max(S.runBest, S.floor+offlineFloors); S.floor = Math.min(S.floor+offlineFloors, MAX_FLOOR); spawnWave(); }
+    let msg=`Пока тебя не было (${Math.ceil(dt/60)} мин), я потыкал киркой за тебя.`;
+    if(g>0) msg+=` Добыто: ${fmt(g)} 💰`;
+    if(offlineSouls>0) msg+=` Душ: ${offlineSouls} 👻`;
+    if(offlineFloors>0) msg+=` Пройдено этажей: ${offlineFloors}`;
+    setTimeout(()=>ded(msg), 1200);
   }
 }
 function save(){
@@ -291,12 +313,16 @@ function tgRestore(done){
 
 /* ================= ФОРМУЛЫ ================= */
 function fmt(n){
+  if(!isFinite(n)||isNaN(n)) return "∞";
   if(n<1000) return Math.floor(n).toString();
   const u=[["T",1e12],["B",1e9],["M",1e6],["K",1e3]];
   for(const [s,v] of u) if(n>=v) return (n/v).toFixed(1)+s;
   return n.toString();
 }
-const monsterBase = f => 15*Math.pow(1.17,f-1);
+const monsterBase = f => {
+  const e = Math.min(Math.max(1,f)-1, 500); // после 500-го этажа рост HP линейный, не экспоненциальный
+  return 15*Math.pow(1.17,e)*Math.max(1,1+(Math.max(0,f-501)*0.02));
+};
 
 /* ============ ДУГА «Первые 10 этажей»: уникальные встречи ============ */
 const EARLY=[
@@ -327,28 +353,32 @@ const MINION_NAMES=["Носильщик","Огрызок","Шумовик-ста
 const BOSS_NAMES=["БОСС «Управляющий»","БОСС «Старший Кассир»","БОСС «Заместитель»","БОСС «Аудитор»","БОСС «Смотрящий»","БОСС «Рентодатель»","БОСС «Начальник Закупок»","БОСС «Профсоюзный Тролль»","БОСС «Гриф Кредитный»","БОСС «БАШНИ»"];
 function waveInfo(f,w){
   if(w<10){
+    const c=corruptionState();
     return {kind:"norm",
-      hp:Math.max(4, monsterBase(f)*0.45),   // HP пропорционален этажу (было ×0.08 — слишком слабые мобы)
+      hp:Math.max(4, monsterBase(f)*0.45*c.hpMult),   // HP пропорционален этажу + коррупция башни
       gold:3*Math.pow(1.15,f-1)*0.08,
       name:MINION_NAMES[(f+w)%MINION_NAMES.length]};
   }
   // волна 10: кульминация
   if(f%10===0){
+    const c=corruptionState();
     const bn = f<=10 ? EARLY[9].nm : BOSS_NAMES[(Math.floor(f/10)-1)%BOSS_NAMES.length];
-    return {kind:"boss", hp:monsterBase(f)*10, gold:3*Math.pow(1.15,f-1)*25, name:bn};
+    return {kind:"boss", hp:Math.min(monsterBase(f)*10*c.hpMult, 1e+15), gold:3*Math.pow(1.15,f-1)*25, name:bn};
   }
   if(f<=10){
     const e=EARLY[f-1];
-    return {kind:e.boss?"boss":(e.mini?"mini":"guard"), hp:e.hp, gold:e.gold,
+    const c=corruptionState();
+    return {kind:e.boss?"boss":(e.mini?"mini":"guard"), hp:e.hp*c.hpMult, gold:e.gold,
       name:e.nm, sub:e.sub, map:e.map, ov:e.ov, s:e.s, note:e.note, intro:e.intro};
   }
-  if(f%5===0) return {kind:"elite", hp:monsterBase(f)*5,  gold:3*Math.pow(1.15,f-1)*2,  name:"Элита этажа"};
-  return {kind:"guard", hp:monsterBase(f)*1.5, gold:3*Math.pow(1.15,f-1)*1.4, name:"Страж этажа"};
+  if(f%5===0) return {kind:"elite", hp:monsterBase(f)*5*corruptionState().hpMult,  gold:3*Math.pow(1.15,f-1)*2,  name:"Элита этажа"};
+  return {kind:"guard", hp:monsterBase(f)*1.5*corruptionState().hpMult, gold:3*Math.pow(1.15,f-1)*1.4, name:"Страж этажа"};
 }
 function tapDmg(){
   let m=Math.pow(1.25,S.tQty.tap)*Math.pow(1.5,Math.max(0,S.tQty.tap-1))*(S.tQty.tap>=4?2:1);
   if(clownOn()) m*=2;                           // «Клоунада»: тап ×2
   m*=1+Math.min(9,(S.tapStacks||0)*0.01);       // Мясник: +1% за тап (кап ×10)
+  if(S.shop.tap) m*=2;                          // Магазин: тап ×2
   return Math.pow(T_GROW,S.tapLvl)*m;
 }
 function heroDiscount(){ return S.tQty.leg>=3 ? 0.85 : 1; }
@@ -383,6 +413,8 @@ function critChance(){
 function totalDps(bossMode){
   let d=0;
   const gm=heroGlobalMulti();
+  const pm=parMulti(); // парагон: +5% к DPS за каждый уровень
+  const corr=corruptionState();
   for(let i=0;i<HEROES.length;i++){
     if(!S.heroLvl[i]) continue;
     let m=1;
@@ -393,9 +425,22 @@ function totalDps(bossMode){
   }
   if(S.heroLvl[5]>=25) d+=heroDps(5)*(covenOn()?0.4:0.2);       // Ведьма: яд всему этажу
   if(prUnion()) d*=1.25;                                        // «Преступный Союз»
+  d*=pm;                                                        // Парагон
+  d*=corr.dpsMult;                                              // Коррупция башни: штраф к урону
+  if(S.shop.dps) d*=1.5;                                        // Магазин: DPS ×1.5
+  if(bossMode&&S.shop.boss) d*=2;                               // Магазин: урон по боссу ×2
   if(S.tQty.tap>=3) d+=tapDmg(); // автотап
   if(clanBuff("hero")) d*=1.05; // бафф клана
   return d;
+}
+function parMulti(){ return 1+S.par*0.05; } // +5% к DPS героев за каждый парагон
+function corruptionState(){
+  if(S.floor<=CORRUPTION_FLOOR) return {hpMult:1, dpsMult:1, active:false};
+  const extra=S.floor-CORRUPTION_FLOOR;
+  const hpPenalty=1+extra*CORRUPTION_PER_FLOOR;                 // монстры становятся жирнее
+  const parReduction=Math.min(extra*PAR_CORRUPTION_REDUCE*S.par, extra*CORRUPTION_PER_FLOOR*0.9);
+  const dpsPenalty=Math.max(0.1, 1-extra*CORRUPTION_PER_FLOOR*0.5+parReduction); // урон падает, парагон спасает
+  return {hpMult:hpPenalty, dpsMult:dpsPenalty, active:true};
 }
 function soulsGain(){ return Math.floor(Math.pow(Math.max(1,S.runBest)/8,1.25))*(S.firstPrestige?1:2); }
 
@@ -697,7 +742,7 @@ function killReward(){
     }
   }
   if(S.wave<10){ S.wave++; spawnWave(); }
-  else { S.floor++; S.wave=1; spawnWave(); }
+  else if(S.floor<MAX_FLOOR){ S.floor++; S.wave=1; spawnWave(); }
   refreshHud(); renderList();
 }
 function addRate(g){ S.rateBuf.push([Date.now(),g]); pruneRate(); }
@@ -1267,6 +1312,7 @@ function refreshHud(){
   $("floorLbl").textContent="Этаж "+S.floor+(boss?" — БОСС":" · Волна "+S.wave+"/10");
   $("goldLbl").textContent=fmt(S.gold);
   $("soulsLbl").textContent="👻 "+S.souls;
+  $("donLbl").textContent="💎 "+S.don;
 }
 let curTab="tap";
 document.querySelectorAll("#tabs button").forEach(b=>{
@@ -1414,6 +1460,36 @@ function renderList(){
         <div class="small" style="margin-top:6px">Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты).</div>`;
     }
   }
+  if(curTab==="shop"){
+    const shopCost={tap:50,dps:100,boss:200};
+    let h=`<div class="card"><div class="info">
+      <div class="nm">💎 ЛАВКА КРИСТАЛЛОВ</div>
+      <div class="st">Кристаллов: ${S.don} (получаешь за престижи)</div>
+    </div></div>
+    <div class="card ${S.shop.tap?"owned":""}">
+      <div class="info">
+        <div class="nm">✊ Тап ×2 (постоянно)</div>
+        <div class="st">Стоимость: ${shopCost.tap} 💎</div>
+      </div>
+      ${S.shop.tap?"<button class=\"buy\" disabled>✔</button>":buyBtn("💎 "+shopCost.tap, S.don>=shopCost.tap, "buyShop_tap")}
+    </div>
+    <div class="card ${S.shop.dps?"owned":""}">
+      <div class="info">
+        <div class="nm">📈 DPS героев ×1.5 (постоянно)</div>
+        <div class="st">Стоимость: ${shopCost.dps} 💎</div>
+      </div>
+      ${S.shop.dps?"<button class=\"buy\" disabled>✔</button>":buyBtn("💎 "+shopCost.dps, S.don>=shopCost.dps, "buyShop_dps")}
+    </div>
+    <div class="card ${S.shop.boss?"owned":""}">
+      <div class="info">
+        <div class="nm">👹 Урон по боссу ×2 (постоянно)</div>
+        <div class="st">Стоимость: ${shopCost.boss} 💎</div>
+      </div>
+      ${S.shop.boss?"<button class=\"buy\" disabled>✔</button>":buyBtn("💎 "+shopCost.boss, S.don>=shopCost.boss, "buyShop_boss")}
+    </div>
+    <div class="small" style="margin-top:6px">Покупки действуют навсегда, даже после престижа. Кристаллы накапливаются при продаже данжа Кредо.</div>`;
+    content.innerHTML=h;
+  }
   attachDelegated();
   refreshHud();
 }
@@ -1429,6 +1505,10 @@ function attachDelegated(){
         const i=+f.slice(7), c=heroCost(i);
         if(S.gold>=c){ S.gold-=c; S.heroLvl[i]++; heroFx(i); sfxBuy(); haptic("impact","medium"); }
       }
+      else if(f.startsWith("buyShop_")){
+        const type=f.slice(10), cost={tap:50,dps:100,boss:200}[type];
+        if(S.don>=cost&&!S.shop[type]){ S.don-=cost; S.shop[type]=true; sfxBuy(); haptic("notify","success"); renderList(); }
+      }
       else if(f.startsWith("buyTal_")){
         const key=f.slice(7), nd=TALENTS[key].nodes[S.tQty[key]];
         if(nd&&S.souls>=nd.c){ S.souls-=nd.c; S.tQty[key]++; addFloat(CW/2,CH*0.3,"👻 ТАЛАНТ ↑",true); sfxBuy(); haptic("notify","success"); }
@@ -1440,12 +1520,13 @@ function attachDelegated(){
       else if(f==="claimChest"&&S.clan.id>=0&&S.clan.chest){ giveClanChest(false); }
       else if(f==="prestige"&&S.floor>=20){
         const g=soulsGain();
-        if(confirm("Продать данж Кредо?\nПолучишь: "+g+" душ\nСброс: этажи, монеты, герои, кулак.")){
+        if(confirm("Продать данж Кредо?\nПолучишь: "+g+" душ\n+1 парагон и +10 кристаллов\nСброс: этажи, монеты, герои, кулак.")){
           S.souls+=g; S.firstPrestige=true;
+          S.par++; S.don+=10; // парагон и кристаллы остаются навсегда
           S.floor=1; S.runBest=1; S.gold=0; S.tapLvl=0;
           S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0]; S.clownB=0; S.breathT=0; S.pity=0; M.info=null;
           spawnFloor(); sfxPrestige(); haptic("notify","success");
-          ded(`Кредо забрал данж и отсчитал ${g} душ. «Приятного бизнеса», — проскрипел он.`);
+          ded(`Кредо забрал данж и отсчитал ${g} душ. Парагон +1 (всего ${S.par}), кристаллов: ${S.don}. «Приятного бизнеса», — проскрипел он.`);
           save(); refreshHud();
         }
       }
