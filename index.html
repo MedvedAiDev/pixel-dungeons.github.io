@@ -630,9 +630,15 @@ function tgRestore(done){
 function fmt(n){
   if(!isFinite(n)||isNaN(n)) return "∞";
   if(n<1000) return Math.floor(n).toString();
-  const u=[["T",1e12],["B",1e9],["M",1e6],["K",1e3]];
-  for(const [s,v] of u) if(n>=v) return (n/v).toFixed(1)+s;
-  return n.toString();
+  const u=[["Vg",1e63],["NoDc",1e60],["OcDc",1e57],["SpDc",1e54],["SxDc",1e51],["QiDc",1e48],["QaDc",1e45],["TDc",1e42],["DDc",1e39],["UDc",1e36],["Dc",1e33],["No",1e30],["Oc",1e27],["Sp",1e24],["Sx",1e21],["Qi",1e18],["Qa",1e15],["T",1e12],["B",1e9],["M",1e6],["K",1e3]];
+  for(let i=0;i<u.length;i++){
+    if(n<u[i][1]) continue; // суффикс велик — смотрим ниже
+    const x=n/u[i][1];
+    if(x>=1000) break;      // даже старший суффикс мал → экспонента
+    if(x>=999.95 && i>0) return (n/u[i-1][1]).toFixed(1).replace(/\.0$/,"")+u[i-1][0]; // «999.9→1000K» → красивее выше
+    return x.toFixed(1).replace(/\.0$/,"")+u[i][0];
+  }
+  return n.toExponential(1).replace("e+","e"); // сверх гигантов: 8e70, без «e+»
 }
 const monsterBase = f => {
   const e = Math.min(Math.max(1,f)-1, 500); // после 500-го этажа рост HP линейный, не экспоненциальный
@@ -897,6 +903,25 @@ function bookBestiary(){
   });
   return h;
 }
+/* 🌟 блок легендарок собирается отдельно, чтобы переставляться вокруг ПЕРВЫХ ШАГОВ */
+function legendBlock(){
+  let lg="<div style='color:#ff9e2c; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🌟 ЛЕГЕНДАРНЫЕ · "+legendCount()+"/"+LEGEND.length+"</div>";
+  LEGEND.forEach(a=>{
+    const done=!!(S.ach&&S.ach[a.id]);
+    lg+="<div style='margin:6px 0; padding:8px; background:"+(done?"#3a2600":"#181124")+"; border:1px solid "+(done?"#ff9e2c":"#4a2a6e")+"; border-radius:8px; display:flex; align-items:center;'>"
+      +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"❔")+"</div>"
+      +"<div style='flex:1 1 auto;'>"
+      +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#8a7fa8")+"; letter-spacing:1px;'>"
+      +(done?a.nm:"?????")
+      +(done?"":" <span style='font-size:10px; font-weight:normal; color:#6a5a8a;'>легендарное</span>")+"</div>"
+      +(done
+        ?"<div style='font-size:11px; color:#9a92c0;'>"+a.how+"</div>"
+        :"<div style='font-size:11px; color:#7a6f96; font-style:italic;'>"+a.hint+"</div>")
+      +"<div style='font-size:11px; color:#7fd17f;'>Награда: +"+a.reward.don+" 💎</div>"
+      +"</div></div>";
+  });
+  return lg;
+}
 function renderAchBook(){
   try{
     let h=bookTabBar();
@@ -930,7 +955,9 @@ function renderAchBook(){
           +(isReady?"<button class='buy ready' style='width:100%; margin-top:6px;' data-fn='claimProg_"+key+"'>🎁 ЗАБРАТЬ +"+fmt(goldReward(pw))+" 💰"+(dn?(" +"+dn+" 💎"):"")+(rd.ready>1?(" · "+rd.ready+" ступени"):"")+"</button>":"")
           +"</div>";
       }
-      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🏅 ПЕРВЫЕ ШАГИ</div>";
+      const stepsClosed=ACHIEVEMENTS.every(a=>S.ach&&S.ach[a.id]); // 🏅 все шаги забраны → блок уезжает под легендарные
+      if(stepsClosed) h+=legendBlock();
+      h+="<div style='color:#ffd75e; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🏅 ПЕРВЫЕ ШАГИ · "+ACHIEVEMENTS.filter(a=>S.ach&&S.ach[a.id]).length+"/"+ACHIEVEMENTS.length+(stepsClosed?" ✔":"")+"</div>";
       ACHIEVEMENTS.forEach(a=>{
         const done=!!(S.ach&&S.ach[a.id]);
         const rdy=achReady(a.id);
@@ -948,22 +975,7 @@ function renderAchBook(){
           +(rdy?"<button class='buy ready' style='white-space:nowrap;' data-fn='claimAch_"+a.id+"'>🎁 ЗАБРАТЬ</button>":"")
           +"</div>";
       });
-      // 🌟 легендарки: внутри вкладки ДОСТИЖЕНИЯ, до открытия — «?????»
-      h+="<div style='color:#ff9e2c; font-size:12px; font-weight:bold; margin:10px 0 4px;'>🌟 ЛЕГЕНДАРНЫЕ · "+legendCount()+"/"+LEGEND.length+"</div>";
-      LEGEND.forEach(a=>{
-        const done=!!(S.ach&&S.ach[a.id]);
-        h+="<div style='margin:6px 0; padding:8px; background:"+(done?"#3a2600":"#181124")+"; border:1px solid "+(done?"#ff9e2c":"#4a2a6e")+"; border-radius:8px; display:flex; align-items:center;'>"
-          +"<div style='font-size:22px; margin:0 10px 0 2px;'>"+(done?a.icon:"❔")+"</div>"
-          +"<div style='flex:1 1 auto;'>"
-          +"<div style='font-weight:bold; color:"+(done?"#ffd75e":"#8a7fa8")+"; letter-spacing:1px;'>"
-          +(done?a.nm:"?????")
-          +(done?"":" <span style='font-size:10px; font-weight:normal; color:#6a5a8a;'>легендарное</span>")+"</div>"
-          +(done
-            ?"<div style='font-size:11px; color:#9a92c0;'>"+a.how+"</div>"
-            :"<div style='font-size:11px; color:#7a6f96; font-style:italic;'>"+a.hint+"</div>")
-          +"<div style='font-size:11px; color:#7fd17f;'>Награда: +"+a.reward.don+" 💎</div>"
-          +"</div></div>";
-      });
+      if(!stepsClosed) h+=legendBlock(); // 🌟 легендарки идут после шагов, пока там есть невыполненные
     }
     achContentEl.innerHTML=h;
   }catch(err){ achContentEl.innerHTML="<div style='color:#d84a3a'>Ошибка рисования книги: "+err.message+"</div>"; }
