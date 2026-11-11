@@ -162,7 +162,7 @@ const MAX_FLOOR=20000; // потолок эпохи: этажи выше не г
 const CORRUPTION_FLOOR=150; // с какого этажа начинается коррупция башни
 const CORRUPTION_PER_FLOOR=0.008; // +0.8% HP монстров за этаж выше порога
 const PAR_CORRUPTION_REDUCE=0.0015; // −0.15% коррупции за уровень парагона
-const H_GROW=1.15, H_COST=1.075, T_GROW=1.65, T_COST=1.07;
+const H_GROW=1.15, H_COST=1.10, T_GROW=1.30, T_COST=1.18;
 /* ================= ДНЕВНЫЕ КВЕСТЫ ================= */
 const QUEST_TYPES=[
   {nm:"Убей боссов", desc:"Повергни боссов на кульминациях этажей", type:"boss", target:3, reward:{pwr:3,don:0}},
@@ -221,7 +221,7 @@ function claimQuest(qIdx, weekly){
   if(!q||!q.done||bag.claimed.includes(qIdx)) return;
   bag.claimed.push(qIdx);
   const g=q.reward.pwr?goldReward(q.reward.pwr):(q.reward.gold||0);
-  S.gold+=g; S.don+=q.reward.don||0;
+  addGold(g); S.don+=q.reward.don||0;
   ded((weekly?"📅 Недельный":"📋 Дневной")+" квест: «"+q.nm+"» — +"+fmt(g)+" 💰"+(q.reward.don?(" +"+q.reward.don+" 💎"):""));
   save(); renderList(); refreshHud();
 }
@@ -301,7 +301,7 @@ function claimAch(id){
   const a=ACHIEVEMENTS.find(x=>x.id===id);
   S.achReady[id]=false; S.ach[id]=true;
   const r=a.reward||{};
-  S.gold+=goldReward(r.pwr||0)+(r.gold||0); S.don+=r.don||0;
+  addGold(goldReward(r.pwr||0)+(r.gold||0)); S.don+=r.don||0;
   const parts=[];
   if(r.pwr)   parts.push("+"+fmt(goldReward(r.pwr))+" 💰");
   if(r.don)   parts.push("+"+r.don+" 💎");
@@ -317,7 +317,7 @@ function claimProg(key){
   let pw=0, dn=0;
   for(let i=p.cur;i<p.cur+p.ready;i++){ pw+=L.tiers[i].r.pwr||0; dn+=L.tiers[i].r.don||0; }
   S.prog[key]=p.cur+p.ready;
-  S.gold+=goldReward(pw); S.don+=dn;
+  addGold(goldReward(pw)); S.don+=dn;
   const rng=p.ready>1?(" "+roman(p.cur+1)+"–"+roman(p.cur+p.ready)):(" "+roman(p.cur+1));
   ded("📶 "+L.icon+" "+L.nm+rng+" — +"+fmt(goldReward(pw))+" 💰"+(dn?(" +"+dn+" 💎"):""));
   try{ bigBurst(); sfxWin(); haptic("notify","success"); }catch(e){}
@@ -446,6 +446,8 @@ function load(){
     S = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
   }catch(e){ S = freshState(); }
   /* ремонт сейва: битые/старые поля не должны убивать циклы */
+  if(typeof S.gold!=="number"||!isFinite(S.gold)) S.gold=0;
+  if(S.gold>1e+302) S.gold=1e+302; // 🏦 старые сейвы с золотом у потолка — под кап казны
   if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
   if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
   if(!Array.isArray(S.heroLvl)) S.heroLvl=[0,0,0,0,0,0,0,0,0,0,0,0];
@@ -496,7 +498,7 @@ function load(){
   const dt = Math.min((Date.now()-S.lastSeen)/1000, 8*3600);
   if(dt>30){
     const res = simulateOfflineTower(dt);
-    if(res.gold>0){ S.gold+=res.gold; }
+    if(res.gold>0){ addGold(res.gold); }
     if(res.souls>0){ S.souls+=res.souls; }
     S.runBest = Math.max(S.runBest, S.floor);
   S.floorTop = Math.max(S.floorTop||0, S.floor); // 🏰 вечный рекорд для лестницы "Скалолаз"
@@ -641,8 +643,17 @@ function fmt(n){
   return n.toExponential(1).replace("e+","e"); // сверх гигантов: 8e70, без «e+»
 }
 const monsterBase = f => {
-  const e = Math.min(Math.max(1,f)-1, 500); // после 500-го этажа рост HP линейный, не экспоненциальный
-  return 15*Math.pow(1.17,e)*Math.max(1,1+(Math.max(0,f-501)*0.02));
+  const e = Math.min(Math.max(1,f)-1, 500);   // до 500-го этажа — прежняя экспонента
+  const post = Math.max(0, f-500);            // после — экспонента ×1.09/этаж вместо линейного +2%
+  const hp = 15*Math.pow(1.17,e)*(post>0?Math.pow(1.09,post):1);
+  return Math.min(hp, 1e+302);                // потолок HP — ниже переполнения double
+};
+/* 💰 единая кривая золота: как HP, но мягче (×1.06/этаж после 500) и с жёстким потолком */
+const goldBase = f => {
+  const e = Math.min(Math.max(1,f)-1, 500);
+  const post = Math.max(0, f-500);
+  const g = 3*Math.pow(1.15,e)*(post>0?Math.pow(1.06,post):1);
+  return Math.min(g, 1e+300);
 };
 
 /* ============ ДУГА «Первые 10 этажей»: уникальные встречи ============ */
@@ -677,14 +688,14 @@ function waveInfo(f,w){
     const c=corruptionState();
     return {kind:"norm",
       hp:Math.max(4, monsterBase(f)*0.45*c.hpMult),   // HP пропорционален этажу + коррупция башни
-      gold:3*Math.pow(1.15,f-1)*0.08,
+      gold:goldBase(f)*0.08,
       name:MINION_NAMES[(f+w)%MINION_NAMES.length]};
   }
   // волна 10: кульминация
   if(f%10===0){
     const c=corruptionState();
     const bn = f<=10 ? EARLY[9].nm : BOSS_NAMES[(Math.floor(f/10)-1)%BOSS_NAMES.length];
-    return {kind:"boss", hp:Math.min(monsterBase(f)*10*c.hpMult, 1e+15), gold:3*Math.pow(1.15,f-1)*25, name:bn};
+    return {kind:"boss", hp:Math.min(monsterBase(f)*10*c.hpMult, 1e+302), gold:goldBase(f)*25, name:bn};
   }
   if(f<=10){
     const e=EARLY[f-1];
@@ -692,15 +703,32 @@ function waveInfo(f,w){
     return {kind:e.boss?"boss":(e.mini?"mini":"guard"), hp:e.hp*c.hpMult, gold:e.gold,
       name:e.nm, sub:e.sub, map:e.map, ov:e.ov, s:e.s, note:e.note, intro:e.intro};
   }
-  if(f%5===0) return {kind:"elite", hp:monsterBase(f)*5*corruptionState().hpMult,  gold:3*Math.pow(1.15,f-1)*2,  name:"Элита этажа"};
-  return {kind:"guard", hp:monsterBase(f)*1.5*corruptionState().hpMult, gold:3*Math.pow(1.15,f-1)*1.4, name:"Страж этажа"};
+  if(f%5===0) return {kind:"elite", hp:monsterBase(f)*5*corruptionState().hpMult,  gold:goldBase(f)*2,  name:"Элита этажа"};
+  return {kind:"guard", hp:monsterBase(f)*1.5*corruptionState().hpMult, gold:goldBase(f)*1.4, name:"Страж этажа"};
+}
+/* 🦸 якорь масштаба: чистый DPS героев (без тапа) — чтобы тап не обгонял героев */
+function heroDpsSum(){
+  let d=0;
+  const gm=heroGlobalMulti(), corr=corruptionState();
+  for(let i=0;i<HEROES.length;i++){
+    if(!S.heroLvl[i]) continue;
+    d+=Math.min(heroDps(i)*gm, 1e+299);          // 🚫 кап на героя: 1.15^lvl не должен переполнять double
+  }
+  if(S.heroLvl[5]>=25) d+=Math.min(heroDps(5)*0.2, 1e+299);   // Ведьма: яд
+  d*=parMulti();
+  d*=corr.dpsMult;
+  if(S.shop.dps) d*=1.5;
+  if(clanBuff("hero")) d*=1.05;
+  return d;
 }
 function tapDmg(){
   let m=talMulti("tap");
   if(clownOn()) m*=2;                           // «Клоунада»: тап ×2
   m*=1+Math.min(9,(S.tapStacks||0)*0.01);       // Мясник: +1% за тап (кап ×10)
   if(S.shop.tap) m*=2;                          // Магазин: тап ×2
-  return Math.pow(T_GROW,S.tapLvl)*m;
+  const raw=Math.pow(T_GROW,S.tapLvl)*m;
+  const cap=Math.max(250, Math.min(heroDpsSum()*4, 1e+301));    // 🚫 тап не обгоняет героев вчетверо и не выше 1e301
+  return Math.min(raw, cap);
 }
 /* 📶 эффект ветки талантов (сырой множитель, без внешних баффов) */
 function talMulti(key){ const n=S.tQty[key]; return Math.pow(1.25,n)*Math.pow(1.5,Math.max(0,n-1))*(n>=4?2:1); }
@@ -717,10 +745,12 @@ function goldMulti(){
 }
 
 /* 💰 Конвертер наград: души дают только перерождения (Кредо), квесты/достижения платят 💰 и 💎 */
+/* 🏦 казна: жёсткий потолок, чтобы золото не улетало в ∞ */
+function addGold(n){ S.gold=Math.min(S.gold+Math.max(0,n||0), 1e+302); }
 function goldReward(pwr){
   if(!pwr) return 0;
   const f=Math.max(1,Math.min(S.floorTop||1,999));
-  return Math.max(100, Math.round(3*Math.pow(1.15,f-1)*12*pwr*goldMulti())); // ~дюжина убийств с этажа за «пай»
+  return Math.max(100, Math.round(goldBase(f)*12*pwr*goldMulti())); // ~дюжина убийств с этажа за «пай»
 }
 function heroDps(i){ return HEROES[i].base*Math.pow(H_GROW,Math.max(0,S.heroLvl[i]-1))*legMulti(); }
 function heroCost(i){ return HEROES[i].unlock*Math.pow(H_COST,S.heroLvl[i])*heroDiscount(); }
@@ -775,7 +805,7 @@ function critChance(){
 function totalDps(bossMode){
   let d=0;
   const gm=heroGlobalMulti();
-  const pm=parMulti(); // парагон: +5% к DPS за каждый уровень
+  const pm=parMulti(); // парагон: +2% к DPS за каждый уровень
   const corr=corruptionState();
   for(let i=0;i<HEROES.length;i++){
     if(!S.heroLvl[i]) continue;
@@ -783,19 +813,19 @@ function totalDps(bossMode){
     if((i===0||i===3)&&bloodSynergy()) m*=2;                    // «Кровопийцы»
     if(bossMode&&i===2&&S.heroLvl[2]>=25) m*=wallOn()?3:(S.heroLvl[2]>=50?3:2);  // Кузнец по боссам (+Стена)
     m*=gm;                                                      // Личь: все герои
-    d+=heroDps(i)*m;
+    d+=Math.min(heroDps(i)*m, 1e+299);           // 🚫 кап на героя
   }
-  if(S.heroLvl[5]>=25) d+=heroDps(5)*(covenOn()?0.4:0.2);       // Ведьма: яд всему этажу
+  if(S.heroLvl[5]>=25) d+=Math.min(heroDps(5)*(covenOn()?0.4:0.2), 1e+299);  // Ведьма: яд всему этажу
   if(prUnion()) d*=1.25;                                        // «Преступный Союз»
   d*=pm;                                                        // Парагон
   d*=corr.dpsMult;                                              // Коррупция башни: штраф к урону
   if(S.shop.dps) d*=1.5;                                        // Магазин: DPS ×1.5
   if(bossMode&&S.shop.boss) d*=2;                               // Магазин: урон по боссу ×2
-  if(S.tQty.tap>=3) d+=tapDmg(); // автотап
+  if(S.tQty.tap>=3) d+=tapDmg(); // автотап (уже ограничен героиками внутри tapDmg)
   if(clanBuff("hero")) d*=1.05; // бафф клана
-  return d;
+  return Math.min(d, 1e+301);                                   // 🚫 страховка: DPS всегда ниже капа HP (1e302)
 }
-function parMulti(){ return 1+S.par*0.05; } // +5% к DPS героев за каждый парагон
+function parMulti(){ return 1+S.par*0.02; } // +2% к DPS героев за каждый парагон
 function corruptionState(){
   if(S.floor<=CORRUPTION_FLOOR) return {hpMult:1, dpsMult:1, active:false};
   const extra=S.floor-CORRUPTION_FLOOR;
@@ -1096,10 +1126,10 @@ function winRaid(){
     if(M.info&&M.info.kind==="boss") M.tStart=performance.now();
     bigBurst(); sfxWin(); haptic("notify","success"); save(); renderList(); return;
   }
-  const loot=Math.floor((3*Math.pow(1.15,S.floor-1))*30*goldMulti());
+  const loot=Math.floor(goldBase(S.floor)*30*goldMulti());
   const stolen=Math.random()<0.25;
   const gl=clanBuff("glory")?62:50;
-  S.gold+=loot; S.glory+=gl;
+  addGold(loot); S.glory+=gl;
   if(stolen){
     S.bestiary++;
     S.bestiaryList.push({nm:RAID.opp.n,sub:"Пойман в рейде",t:Date.now()});
@@ -1200,8 +1230,8 @@ function clanBossDmgHit(){
   return totalDps(false)*20*(clanBuff("boss")?1.3:1);
 }
 function giveClanChest(silent){
-  const loot=Math.floor((3*Math.pow(1.15,Math.max(S.runBest,10)-1))*52*goldMulti()); // 🏰 в сундуке золото (щедрее взамен душ)
-  S.gold+=loot; S.glory+=50; addRate(loot);
+  const loot=Math.floor(goldBase(Math.max(S.runBest,10))*52*goldMulti()); // 🏰 в сундуке золото (щедрее взамен душ)
+  addGold(loot); S.glory+=50; addRate(loot);
   S.chestsEver=(S.chestsEver||0)+1; // 🎖 за все времена (не сбрасывается) → лестница легенды "Казначей"
   S.clan.chest=0; save(); refreshHud();
   if(S.chestsEver>=10){ try{ checkLegend("chests"); }catch(e){} } // 🌟 10 трофеев клановых боссов
@@ -1236,7 +1266,7 @@ function spawnFloor(){ S.wave=1; spawnWave(); }
 function killReward(){
   const kind=M.info.kind, wasBoss=kind==="boss";
   const g = M.info.gold*goldMulti()*(kind==="boss"&&S.tQty.mar>=3?2:1);
-  S.gold+=g; addRate(g);
+  addGold(g); addRate(g);
   if(wasBoss){ shake=0.5; flashT=0.32; bigBurst(); sfxBossDie(); haptic("notify","success"); }
   else if(kind==="mini"){ shake=0.3; flashT=0.18; bigBurst(); sfxRaidKill(); haptic("notify","success"); }
   else { shake=0.1; burst(); sfxKill(); haptic("impact","medium"); }
@@ -1894,7 +1924,7 @@ function renderList(){
     h+=`<div class="card"><div class="info">
       <div class="nm">🧟 СИЛА НАСЛЕДНИКА</div>
       <div class="st">🗡 тап ×${fmtE(tapE)} · 🛡 герои ×${fmtE(legE)} · 💰 золото ×${fmtE(marE)}</div>
-      <div class="st small">Парагон: ${S.par} → герои +${S.par*5}% DPS${best?(" · 📚 бестиарий: +"+best*2+"% золота"):""}${corr.active?(" · ⚠ коррупция: моб ×"+fmtE(corr.hpMult)+", урон ×"+fmtE(corr.dpsMult)):""}</div>
+      <div class="st small">Парагон: ${S.par} → герои +${S.par*2}% DPS${best?(" · 📚 бестиарий: +"+best*2+"% золота"):""}${corr.active?(" · ⚠ коррупция: моб ×"+fmtE(corr.hpMult)+", урон ×"+fmtE(corr.dpsMult)):""}</div>
       <div class="st small">💸 Души платит только Кредо за перерождение. Квесты и достижения платят 💰 и 💎.</div>
     </div></div>
     <button id="prestigeBtn" ${can?"":"disabled"} data-fn="prestige">
@@ -2205,7 +2235,7 @@ function tutCheck(){
   const doneCount=TUT.filter(s=>s.chk()).length;
   const idx=TUT.findIndex(s=>!s.chk());
   if(idx<0){
-    S.tutFlags.done=true; S.gold+=100; refreshHud();
+    S.tutFlags.done=true; addGold(100); refreshHud();
     ded("🎓 Обучение пройдено! Премия за аттестацию: +100 💰. Бог в помощь — то есть я.");
     sfxWin();
     tutEl.style.display="none";
