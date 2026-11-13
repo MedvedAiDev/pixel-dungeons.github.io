@@ -133,6 +133,17 @@
     </div>
   </div>
 
+  <div id="leaveDlg" style="display:none; position:fixed; inset:0; z-index:70; background:rgba(10,7,18,0.88); padding:22px 10px;">
+    <div style="max-width:420px; margin:0 auto; background:#1a142e; border:2px solid #a03a30; border-radius:12px; padding:16px; box-shadow:0 0 34px rgba(160,58,48,0.55);">
+      <div style="font-weight:bold; color:#ff7a6a; margin-bottom:10px;">🚪 ВЫЙТИ ИЗ КЛАНА?</div>
+      <div id="leaveTxt" style="font-size:13px; color:#dcd6f2; line-height:1.55;"></div>
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button class="buy" id="leaveYes" style="flex:1; background:#7a1f1a; border-color:#a03a30; color:#ffd0c8;">🚪 ВЫЙТИ ИЗ КЛАНА</button>
+        <button class="buy" id="leaveNo" style="flex:1;">ОТМЕНА</button>
+      </div>
+    </div>
+  </div>
+
   <div id="stage">
     <canvas id="cv"></canvas>
     <div id="floorLbl">Этаж 1</div>
@@ -465,7 +476,7 @@ function freshState(){
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
     wquests:{wk:0, list:[], claimed:[], genT:0}, // 📅 недельные квесты
-    ach:{}, achReady:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, chestsEver:0, soulsEver:0, lastPrestige:0, capLvl:0, hsLvl:0, trLvl:0, offLvl:0, startFloor:1, blood:0, bloodSpent:0, customClan:null, worldK:"", epicK:"", mythicK:"", // 🏆 достижения, 🎁 забор, 🛒 ×N, 🗝 сундуки, 👻 архив Кредо, 💵 капитал, 🚀 старт, 🔥 факелы, ⏰ смена, 🩸 донат, 🩸📊 потрачено, 🏰 свой клан, 🌠 добитые боссы
+    ach:{}, achReady:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, chestsEver:0, soulsEver:0, lastPrestige:0, capLvl:0, hsLvl:0, trLvl:0, offLvl:0, startFloor:1, blood:0, bloodSpent:0, customClan:null, worldK:"", epicK:"", mythicK:"", clanCd:0, // 🏆 достижения, 🎁 забор, 🛒 ×N, 🗝 сундуки, 👻 архив Кредо, 💵 капитал, 🚀 старт, 🔥 факелы, ⏰ смена, 🩸 донат, 🩸📊 потрачено, 🏰 свой клан, 🌠 добитые боссы, ⏳ штраф клана
   };
 }
 let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
@@ -490,6 +501,7 @@ function load(){
   if(typeof S.worldK!=="string") S.worldK=""; // 🌠 добитый мировой босс (ключ окна)
   if(typeof S.epicK!=="string") S.epicK="";   // 🌟 добитый эпический
   if(typeof S.mythicK!=="string") S.mythicK=""; // 🌌 добитый мифический
+  if(typeof S.clanCd!=="number") S.clanCd=0; // ⏳ штраф на вступление после выхода из клана
   if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
   if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
   if(S.customClan!==undefined && S.customClan!==null && (typeof S.customClan!=="object"||!S.customClan.custom)) S.customClan=null;
@@ -1393,8 +1405,9 @@ document.getElementById("rankContent").addEventListener("click",e=>{
 /* 🏰 окно выбора клана: те же карточки со standings, что были во вкладке */
 function renderJoinBook(){
   const el=document.getElementById("joinContent");
+  const cd=S.clanCd&&Date.now()<S.clanCd; // ⏳ штраф за выход из клана
   const ptsList=CLANS.map((c,j)=>S.clan.id===j?Math.floor(S.clan.pts):rivalPts(j)).sort((a,b)=>b-a);
-  let h="";
+  let h=cd?`<div class="card" style="border-color:#a03a30"><div class="info"><div class="st" style="color:#ff7a6a">⛔ Штраф за выход из клана: вступить можно через <b>${fmtCd()}</b></div></div></div>`:"";
   CLANS.forEach((cl,i)=>{
     if(cl.custom) return;
     const pts=S.clan.id===i?Math.floor(S.clan.pts):rivalPts(i);
@@ -1406,7 +1419,7 @@ function renderJoinBook(){
         <div class="st">👤 ${cl.mem}/${clanSlots(cl.lvl)} бойцов · 🎁 ${cl.bTxt}</div>
         <div class="st">📊 ${fmt(pts)} очк. · ${place}-е место в лиге</div>
       </div>
-      <button class="buy" data-fn="joinClan_${i}">ВСТУПИТЬ</button>
+      <button class="buy" ${cd?"disabled ":""} data-fn="joinClan_${i}">ВСТУПИТЬ</button>
     </div>`;
   });
   h+=`<div class="small" style="margin-top:6px">Онлайн-кланы с друзьями придут вместе с сервером. Сейчас — кланы-призраки (живут по расписанию башни).</div>`;
@@ -1482,23 +1495,39 @@ function joinClan(id){
   sfxBuy(); save(); renderList(); refreshHud();
   checkAchievement("clan_join");
 }
+function clanCdRem(){ return Math.max(0,(S.clanCd||0)-Date.now()); } // ⏳ остаток штрафа
+function fmtCd(){ const s=Math.ceil(clanCdRem()/1000); return Math.floor(s/3600)+":"+String(Math.floor(s%3600/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); }
 function joinById(id){ // 🏰 вступление с подтверждением (кнопки во вкладке и в окне выбора)
+  if(S.clanCd&&Date.now()<S.clanCd){ ded("⏳ Штраф за выход из клана: вступить в любой клан можно через "+fmtCd()+"."); haptic("notify","error"); return false; }
   const cl=CLANS[id];
   if(!cl) return false;
   if(!confirm("Вступить в клан «"+cl.n+"»?\n"+cl.motto+"\nБафф: 🎁 "+cl.bTxt+" · Бойцов: 👤 "+cl.mem+"\nЛичный вклад начнётся с нуля.")) return false;
   joinClan(id); warTab="clan"; haptic("notify","success");
   return true;
 }
-function leaveClan(){ // 🚪 выход из клана: прогресс недели сгорает, свой клан ждёт
+function leaveClan(){ // 🚪 выход из клана: окно-предупреждение (прогресс сгорает + штраф 24 ч)
   if(S.clan.id<0) return;
   if(RAID.active&&RAID.kind==="clan") return; // во время штурма босса не выйдешь
   const nm=CLANS[S.clan.id]?CLANS[S.clan.id].n:"";
-  if(!confirm("Выйти из клана «"+nm+"»?\nОчки недели, личный вклад и прогресс босса сгорят."+(S.clan.chest?"\n⚠ Незабранный трофей клана пропадёт!":"")+(S.customClan?"\nСвой клан дождётся — вернуться можно бесплатно.":""))) return;
+  document.getElementById("leaveTxt").innerHTML=
+    "Выйти из клана «"+nm+"»?"
+    +"<br>⚠ Очки недели, личный вклад и прогресс босса <b>сгорят</b>."
+    +(S.clan.chest?"<br>⚠ Незабранный трофей клана пропадёт!":"")
+    +"<br>⛔ Штраф: <b>24 часа</b> нельзя вступить ни в один клан."
+    +(S.customClan?"<br>🏰 Свой клан сохранится — вернуться можно будет через 24 часа.":"");
+  audio(); document.getElementById("leaveDlg").style.display="block"; haptic("select");
+}
+function doLeaveClan(){ // сам выход: обнуление недели + штраф 24 ч
+  const nm=CLANS[S.clan.id]?CLANS[S.clan.id].n:"";
   S.clan.id=-1; S.clan.pts=0; S.clan.contrib=0; S.clan.bossMax=0; S.clan.bossHp=0;
   S.clan.chest=0; S.clan.war=false; S.clan.hitsToday=0; S.clan.lastSim=Date.now();
-  ded("🚪 Ты покинул клан «"+nm+"». Дверь не заперта — вернуться всегда можно.");
+  S.clanCd=Date.now()+24*3600e3; // ⏳ 24 часа штрафа на вступление
+  ded("🚪 Ты покинул клан «"+nm+"». 24 часа башня не пускает ни в один клан.");
   sfxBuy(); save(); renderList(); refreshHud(); haptic("select");
 }
+const leaveDlgEl=document.getElementById("leaveDlg");
+document.getElementById("leaveYes").addEventListener("click",()=>{ leaveDlgEl.style.display="none"; audio(); doLeaveClan(); });
+document.getElementById("leaveNo").addEventListener("click",()=>{ leaveDlgEl.style.display="none"; audio(); haptic("select"); });
 function clanBossDmgHit(){
   return totalDps(false)*20*(1+clanBonus("boss"))*(1+0.05*((clanLvl()||1)-1)); // 🏰 уровень клана: +5%/ур.
 }
@@ -2299,6 +2328,7 @@ function renderList(){
           <button class="buy" style="flex:1 1 auto; padding:12px 8px; font-size:16px;" data-fn="openJoin">🏰 ВСТУПИТЬ В КЛАН</button>
         </div>
         <div class="small" style="margin:2px 0 8px; text-align:center;">Бафф, еженедельный босс, сундуки и лига «Башня Тысячи Этажей»</div>
+        ${(S.clanCd&&Date.now()<S.clanCd)?`<div class="small" style="margin:0 0 8px; text-align:center; color:#ff7a6a">⛔ Штраф за выход из клана: вступление через ${fmtCd()}</div>`:""}
         <div class="card">
           <div class="info">
             <div class="nm">🏰 СВОЙ КЛАН <span class="small">донат</span></div>
@@ -2310,7 +2340,7 @@ function renderList(){
             <div class="st">${CLANS.some(c=>c.custom)?("Твой клан «"+CLANS.find(c=>c.custom).n+"» ждёт командира"):"Основай собственный клан за 50 🩸"}</div>
             <div class="st small">Назовёшь его как хочешь, выберешь один бесплатный бафф; остальные 5 баффов и прокачку докупишь за 🩸. Возврат в свой клан — бесплатно.</div>`}
           </div>
-          ${clanCreateName?"":(function(){const ci=CLANS.findIndex(c=>c.custom); return ci>=0?'<button class="buy" data-fn="joinClan_'+ci+'">ВЕРНУТЬСЯ</button>':buyBtn("🏰 СОЗДАТЬ — 50 🩸", S.blood>=50, "createClan");})()}
+          ${clanCreateName?"":(function(){const ci=CLANS.findIndex(c=>c.custom); const cd=S.clanCd&&Date.now()<S.clanCd; return ci>=0?'<button class="buy" '+(cd?"disabled ":"")+'data-fn="joinClan_'+ci+'">'+(cd?"ВЕРНУТЬСЯ (⏳ "+fmtCd()+")":"ВЕРНУТЬСЯ")+'</button>':buyBtn("🏰 СОЗДАТЬ — 50 🩸", S.blood>=50, "createClan");})()}
         </div>
         <div class="small" style="margin-top:6px">Онлайн-кланы с друзьями придут вместе с сервером. Сейчас — кланы-призраки (живут по расписанию башни).</div>`;
       } else {
@@ -2326,10 +2356,7 @@ function renderList(){
           ${cl.custom?"":`<div class="st">Бафф клана: 🎁 ${cl.bTxt} <span class="small">(у призраков не прокачивается)</span></div>`}
           <div class="st">Личный вклад за неделю: ${fmt(c.contrib)} очк.</div>
         </div>
-        ${cl.custom?`<div style="display:flex; flex-direction:column; gap:6px;">
-        <button class="buy" data-fn="clanDescEdit">✏ ОПИСАНИЕ</button>
-        <button class="buy" ${(RAID.active&&RAID.kind==="clan")?"disabled":""} data-fn="clanLeave">🚪 ВЫЙТИ</button>
-        </div>`:`<button class="buy" ${(RAID.active&&RAID.kind==="clan")?"disabled":""} data-fn="clanLeave">🚪 ВЫЙТИ ИЗ КЛАНА</button>`}
+        ${cl.custom?`<button class="buy" data-fn="clanDescEdit">✏ ОПИСАНИЕ</button>`:""}
         </div>
         <div class="card"><div class="info">
           <div class="nm">🏰 УРОВЕНЬ КЛАНА ${clanLvl()}/10</div>
@@ -2363,7 +2390,9 @@ function renderList(){
         <button id="prestigeBtn" ${(S.torches>0&&S.floor>=3&&c.hitsToday<3&&!RAID.active&&c.bossHp>0)?"":"disabled"} data-fn="clanHit">
           ${(c.hitsToday>=3)?"⚔ ШТУРМЫ НА СЕГОДНЯ ИСЧЕРПАНЫ (3/3)":(c.bossHp<=0?"👹 БОСС УЖЕ ДОБИТ — ЖДИ НОВОЙ НЕДЕЛИ":(S.torches>0?"⚔ ШТУРМ БОССА (−1 🔥) · "+c.hitsToday+"/3 в день":(S.floor<3?"с 3-го этажа":"🔥 Факелы кончились (+1 через "+cmm+":"+css+")")))}
         </button>
-        <div class="small" style="margin-top:6px">Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты). Полная таблица лиги — в 📊 РЕЙТИНГАХ.</div>`;
+        <div class="small" style="margin-top:6px">Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты). Полная таблица лиги — в 📊 РЕЙТИНГАХ.</div>
+        <button class="buy" style="display:block; width:100%; margin-top:10px; background:#7a1f1a; border-color:#a03a30; color:#ffd0c8;" ${(RAID.active&&RAID.kind==="clan")?"disabled":""} data-fn="clanLeave">🚪 ВЫЙТИ ИЗ КЛАНА</button>
+        <div class="small" style="margin-top:4px; color:#ff7a6a">Выход сжигает прогресс недели и накладывает штраф: 24 ч без вступлений.</div>`;
       }
     } else {
       h+=`
