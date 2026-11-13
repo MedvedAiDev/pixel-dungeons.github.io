@@ -465,7 +465,7 @@ function freshState(){
     bestiary:0, bestiaryList:[], // 📚 бестиарий: пойманные монстры
     quests:{day:0, list:[], claimed:[], genT:0}, // 📋 дневные квесты
     wquests:{wk:0, list:[], claimed:[], genT:0}, // 📅 недельные квесты
-    ach:{}, achReady:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, chestsEver:0, soulsEver:0, lastPrestige:0, capLvl:0, hsLvl:0, trLvl:0, offLvl:0, startFloor:1, blood:0, bloodSpent:0, customClan:null, // 🏆 достижения, 🎁 забор, 🛒 ×N, 🗝 сундуки, 👻 архив Кредо, 💵 капитал, 🚀 старт, 🔥 факелы, ⏰ смена, 🩸 донат, 🩸📊 потрачено, 🏰 свой клан
+    ach:{}, achReady:{}, achNew:0, raidWins:0, bossKills:0, prog:{tap:0,boss:0,floor:0,raid:0,bestiary:0,prestige:0}, floorTop:0, buyQty:1, chestsEver:0, soulsEver:0, lastPrestige:0, capLvl:0, hsLvl:0, trLvl:0, offLvl:0, startFloor:1, blood:0, bloodSpent:0, customClan:null, worldK:"", epicK:"", mythicK:"", // 🏆 достижения, 🎁 забор, 🛒 ×N, 🗝 сундуки, 👻 архив Кредо, 💵 капитал, 🚀 старт, 🔥 факелы, ⏰ смена, 🩸 донат, 🩸📊 потрачено, 🏰 свой клан, 🌠 добитые боссы
   };
 }
 let hadLocalSave=false; // есть ли сейв в localStorage этого устройства
@@ -487,6 +487,9 @@ function load(){
   if(typeof S.startFloor!=="number"||S.startFloor<1) S.startFloor=1;
   if(typeof S.blood!=="number"||S.blood<0) S.blood=0; // 🩸 кровавый кристалл (донат)
   if(typeof S.bloodSpent!=="number"||S.bloodSpent<0) S.bloodSpent=0; // 🩸📊 потрачено за всё время
+  if(typeof S.worldK!=="string") S.worldK=""; // 🌠 добитый мировой босс (ключ окна)
+  if(typeof S.epicK!=="string") S.epicK="";   // 🌟 добитый эпический
+  if(typeof S.mythicK!=="string") S.mythicK=""; // 🌌 добитый мифический
   if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
   if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
   if(S.customClan!==undefined && S.customClan!==null && (typeof S.customClan!=="object"||!S.customClan.custom)) S.customClan=null;
@@ -1127,10 +1130,38 @@ function bigBurst(){
 }
 
 /* ================= РЕЙД: Призрак подземелья (v0 — боты) ================= */
-const RAID={active:false,opp:null,kills:0,hp:0,max:0,base:0,tEnd:0,over:null,kind:"enemy"};
+const RAID={active:false,opp:null,kills:0,hp:0,max:0,base:0,tEnd:0,over:null,kind:"enemy",need:3,key:"",spec:""};
 const OPP_A=["Рыцарь","Барыга","Мадам","Сэр","Грозная","Дедушка","Капитан"];
 const OPP_B=["ЖЭК-3","БЗПО","Топор","Специй","Плюш","Пиксель","Дебет","Черпак"];
 function rollOpp(){ S.opp={n:pick(OPP_A)+" "+pick(OPP_B),t:1+Math.floor(Math.random()*10)}; sfxBuy(); save(); }
+/* 🌠 БОССЫ РЕЙДОВ: сложность = звёзды → эквивалентный этаж (дельты задал игрок: 1★≈40-й, 10★=10000-й) */
+function starFloor(t){ return Math.round(40*Math.pow(250,(t-1)/9)); } // 1★≈40 … 5★≈770 … 10★=10000
+function hashSeed(n){ n=(n^61)^(n>>>16); n=(n+(n<<3))>>>0; n^=n>>>4; n=(n*277803737)>>>0; return (n^(n>>>15))>>>0; }
+function worldBossInfo(){ // 👑 мировой босс: 10:00 и 22:00, окно 2 часа, звёзды 1..10 от даты
+  const now=Date.now(), d=new Date(now);
+  const d0=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  const spawns=[d0+10*3600e3, d0+22*3600e3];
+  for(let i=0;i<spawns.length;i++){
+    const s=spawns[i];
+    if(now>=s && now<s+2*3600e3){
+      return {active:true, kind:"world", stars:1+hashSeed((s/1000)|0)%10, key:"w"+s, ends:s+2*3600e3};
+    }
+  }
+  return {active:false};
+}
+function epicBossInfo(){ // 🌟 эпический: каждое воскресенье, окно весь день, 10★
+  const d=new Date(Date.now());
+  if(d.getDay()!==0) return {active:false};
+  const d0=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  return {active:true, kind:"epic", stars:10, key:"e"+d0, ends:d0+24*3600e3};
+}
+const MYTH_EPOCH=Date.UTC(2026,0,1); // 🌌 мифический: каждые 15 дней с этой точки, окно 24 ч
+function mythicBossInfo(){
+  const now=Date.now(), cyc=Math.floor((now-MYTH_EPOCH)/(15*864e5));
+  const s=MYTH_EPOCH+cyc*15*864e5;
+  if(now>=s && now<s+24*3600e3) return {active:true, kind:"mythic", stars:10, key:"m"+s, ends:s+24*3600e3};
+  return {active:false};
+}
 function torchMax(){ return 3+(S.trLvl||0); } // 🔥 запас факелов (вечный апгрейд «Факельщик»)
 function regenTorches(){
   const iv=Math.round(600000*(1-clanBonus("torch"))); // бафф клана: факел быстрее (уровневый)
@@ -1142,35 +1173,48 @@ function regenTorches(){
 function startRaid(kind){
   kind=kind||"enemy";
   if(RAID.active||S.floor<3) return;
+  const specGet={world:worldBossInfo,epic:epicBossInfo,mythic:mythicBossInfo}[kind];
+  let bi=null;
   if(kind==="clan"){
     if(S.clan==null||S.clan.id<0) return;
     if(S.clan.hitsToday>=3||S.clan.bossHp<=0) return;
+  } else if(specGet){
+    bi=specGet();
+    if(!bi.active) return;
+    if((S[{world:"worldK",epic:"epicK",mythic:"mythicK"}[kind]]||"")===bi.key) return; // уже добит в этом окне
   }
   if(S.torches<=0) return;
   S.torches--; if(S.torches===2) S.lastTorchT=Date.now();
   checkAchievement("first_raid"); // 🏅 первая охота на стражей
+  const mult=kind==="world"?10:kind==="epic"?40:kind==="mythic"?120:1;
   const base= kind==="clan"
     ? Math.max(5,totalDps(false))*5
-    : Math.max(5,totalDps(false))*(6+S.opp.t*1.5);
+    : Math.round(monsterBase(starFloor(bi?bi.stars:S.opp.t))*0.45*mult); // 🌠 сложность: звёзды → эквивалентный этаж
   RAID.active=true; RAID.over=null; RAID.kills=0; RAID.kind=kind;
+  RAID.need=(kind==="enemy"||kind==="clan")?3:1; RAID.key=bi?bi.key:""; RAID.spec=bi?kind:"";
+  RAID.tEnd=performance.now()+45000;
   if(kind==="clan"){
     RAID.opp={n:"РЕВИЗОР ВЗЫСКАНИЯ",t:S.clan.wk};
     S.clan.hitsToday++;
     ded("Штурм босса клана! Ревизоры стоять не умеют — круши!");
+  } else if(bi){
+    const dur=kind==="world"?90:kind==="epic"?120:180;
+    RAID.opp={n:{world:"👑 МИРОВОЙ БОСС",epic:"🌟 ЭПИЧЕСКИЙ БОСС",mythic:"🌌 МИФИЧЕСКИЙ БОСС"}[kind], t:bi.stars};
+    RAID.tEnd=performance.now()+dur*1000;
+    ded(RAID.opp.n+" ("+bi.stars+"★, ≈ этаж "+starFloor(bi.stars)+")! "+dur+" секунд на всё — круши!");
   } else {
     RAID.opp={n:S.opp.n,t:S.opp.t};
-    ded("Призрак "+S.opp.n+" подметает этаж. Факел в зубы!");
+    ded("Призрак "+S.opp.n+" ("+S.opp.t+"★, ≈ этаж "+starFloor(S.opp.t)+") подметает этаж. Факел в зубы!");
   }
   RAID.base=base; RAID.max=base; RAID.hp=base;
-  RAID.tEnd=performance.now()+45000;
   S.tutFlags.raid=true;
   sfxRaidIn(); renderList(); refreshHud();
 }
 function killStrazh(now){
   if(!RAID.opp) { RAID.active=false; return; }
   RAID.kills++; burst(); sfxRaidKill();
-  addFloat(CW/2,CH*0.42,"СТРАЖ ПАЛ!",true);
-  if(RAID.kills>=3){ winRaid(); }
+  addFloat(CW/2,CH*0.42,RAID.kind==="enemy"?"СТРАЖ ПАЛ!":"ФАЗА ПРОЙДЕНА!",true);
+  if(RAID.kills>=RAID.need){ winRaid(); }
   else { RAID.max=Math.round(RAID.base*(1+RAID.kills*0.35)); RAID.hp=RAID.max; }
 }
 function winRaid(){
@@ -1189,9 +1233,26 @@ function winRaid(){
     if(M.info&&M.info.kind==="boss") M.tStart=performance.now();
     bigBurst(); sfxWin(); haptic("notify","success"); save(); renderList(); return;
   }
-  const loot=Math.floor(goldBase(S.floor)*30*goldMulti());
+  if(RAID.kind==="world"||RAID.kind==="epic"||RAID.kind==="mythic"){ // 🌠 особые боссы: награда от звёзд
+    const sf=starFloor(RAID.opp.t);
+    const gl={world:150,epic:500,mythic:1500}[RAID.kind], don={world:1,epic:5,mythic:15}[RAID.kind], gm={world:40,epic:80,mythic:150}[RAID.kind];
+    const loot=Math.floor(goldBase(sf)*gm*goldMulti());
+    const glory=Math.round(gl*(1+clanBonus("glory"))*(1+0.03*((clanLvl()||1)-1)));
+    addGold(loot); S.glory+=glory; S.don+=don;
+    S[{world:"worldK",epic:"epicK",mythic:"mythicK"}[RAID.kind]]=RAID.key; // окно закрыто от повторного фарма
+    if(S.clan&&S.clan.id>=0){ S.clan.pts+=100; S.clan.contrib+=100; }
+    addRate(loot);
+    RAID.active=false;
+    RAID.over={win:true,spec:RAID.kind,loot,gl:glory,don,until:performance.now()+4200};
+    ded(RAID.opp.n+" повержен! Слава 💠+"+glory+", 💎+"+don+", добыча "+fmt(loot)+" 💰.");
+    if(M.info&&M.info.kind==="boss") M.tStart=performance.now();
+    bigBurst(); sfxWin(); haptic("notify","success"); refreshHud(); renderList(); save();
+    return;
+  }
+  const sfR=starFloor(RAID.opp?RAID.opp.t:1);
+  const loot=Math.floor(goldBase(sfR)*(25+(RAID.opp?RAID.opp.t:1)*10)*goldMulti()); // 🌠 награда от звёзд
   const stolen=Math.random()<0.25;
-  const gl=Math.round(50*(1+clanBonus("glory"))*(1+0.03*((clanLvl()||1)-1))); // 🏰 уровень клана: +3% Славы/ур.
+  const gl=Math.round((50+(RAID.opp?RAID.opp.t:1)*10)*(1+clanBonus("glory"))*(1+0.03*((clanLvl()||1)-1)));
   addGold(loot); S.glory+=gl;
   if(stolen){
     S.bestiary++;
@@ -2011,8 +2072,12 @@ function drawRaidScene(now){
     ctx.fillStyle=o.win?"#7fd17f":"#d84a3a"; ctx.font="bold 24px monospace";
     ctx.fillText(isClan?"⚔ ШТУРМ ЗАВЕРШЁН ⚔":(o.win?"⚔ ПОБЕДА! ⚔":"ОТСТУПИЛИ…"), CW/2, CH*0.33);
     ctx.fillStyle="#e8e0d0"; ctx.font="12px monospace";
-    if(o.win&&!o.clan){
-      ctx.fillText("Слава +50", CW/2, CH*0.43);
+    if(o.win&&o.spec){ // 🌠 особый босс
+      ctx.fillText({world:"👑 МИРОВОЙ БОСС ПОВЕРЖЕН!",epic:"🌟 ЭПИЧЕСКИЙ БОСС ПОВЕРЖЕН!",mythic:"🌌 МИФИЧЕСКИЙ БОСС ПОВЕРЖЕН!"}[o.spec], CW/2, CH*0.37);
+      ctx.fillText("Слава 💠+"+o.gl+" · 💎+"+o.don, CW/2, CH*0.43);
+      ctx.fillText("Добыча: "+fmt(o.loot)+" 💰", CW/2, CH*0.49);
+    } else if(o.win&&!o.clan){
+      ctx.fillText("Слава +"+(50+(RAID.opp?RAID.opp.t:1)*10), CW/2, CH*0.43);
       ctx.fillText("Добыча: "+fmt(o.loot)+" 💰", CW/2, CH*0.49);
       if(o.stolen) ctx.fillText("Монстр украден в Бестиарий! (+2% золота)", CW/2, CH*0.55);
     } else {
@@ -2034,8 +2099,8 @@ function drawRaidScene(now){
   ctx.fillStyle="#23303a"; ctx.fillRect(x,y,w,h);
   ctx.fillStyle=isClan?"#ffd75e":"#66d9e8"; ctx.fillRect(x,y,w*Math.max(0,RAID.hp/RAID.max),h);
   ctx.fillStyle="#e8e0d0"; ctx.font="bold 10px monospace";
-  ctx.fillText((isClan?"СЛУГА РЕВИЗОРА ":"СТРАЖ ")+(RAID.kills+1)+"/3 — "+RAID.opp.n,CW/2,y+h-3);
-  for(let i=0;i<3;i++){ ctx.fillStyle=i<RAID.kills?(isClan?"#ffd75e":"#66d9e8"):"#23303a"; ctx.fillRect(CW/2-24+i*18,y+h+8,10,4); }
+  ctx.fillText((isClan?"СЛУГА РЕВИЗОРА ":(RAID.kind==="enemy"?"СТРАЖ ":"БОСС "))+(RAID.need>1?(RAID.kills+1)+"/"+RAID.need+" — ":"")+RAID.opp.n,CW/2,y+h-3);
+  for(let i=0;i<RAID.need;i++){ ctx.fillStyle=i<RAID.kills?(isClan?"#ffd75e":"#66d9e8"):"#23303a"; ctx.fillRect(CW/2-24+i*18,y+h+8,10,4); }
   const rem=Math.max(0,(RAID.tEnd-now)/1000);
   ctx.fillStyle=rem<10?"#d84a3a":(isClan?"#ffd75e":"#66d9e8"); ctx.font="bold 16px monospace";
   ctx.fillText("⏱ "+rem.toFixed(1)+" сек", CW/2, y+h+32);
@@ -2300,12 +2365,32 @@ function renderList(){
           <div class="nm">⚔ РЕЙД: Призрак подземелья</div>
           <div class="st">Слава: 💠 ${S.glory} | Бестиарий: ${S.bestiary} ${plural(S.bestiary,"монстр","монстра","монстров")} (+${S.bestiary*2}% золота)</div>
           <div class="st">Факелы: ${S.torches?("🔥".repeat(S.torches)):"—"} ${S.torches<torchMax()?("(+1 через "+mm+":"+ss+")"):"(полны)"}</div>
+          <div class="st small">👑 Мировой босс — каждый день в 10:00 и 22:00 (2 часа)</div>
         </div>
-      </div>
+      </div>`;
+      // 🌠 особые боссы: мировой (10:00/22:00), эпик (вс), мифик (раз в 15 дней)
+      [worldBossInfo(),epicBossInfo(),mythicBossInfo()].forEach(bi=>{
+        if(!bi.active) return;
+        const done=(S[{world:"worldK",epic:"epicK",mythic:"mythicK"}[bi.kind]]||"")===bi.key;
+        const nm={world:"👑 МИРОВОЙ БОСС",epic:"🌟 ЭПИЧЕСКИЙ БОСС (воскресенье)",mythic:"🌌 МИФИЧЕСКИЙ БОСС (раз в 15 дней)"}[bi.kind];
+        const sec=Math.max(0,Math.floor((bi.ends-Date.now())/1000));
+        const hh=Math.floor(sec/3600), mr=String(Math.floor(sec%3600/60)).padStart(2,"0"), sr=String(sec%60).padStart(2,"0");
+        const btn="start"+bi.kind[0].toUpperCase()+bi.kind.slice(1);
+        h+=`
+        <div class="card">
+          <div class="info">
+            <div class="nm">${nm} ${"★".repeat(bi.stars)}</div>
+            <div class="st">Сложность ≈ этаж ${starFloor(bi.stars)} · награда: 💰 ×${{world:40,epic:80,mythic:150}[bi.kind]} · 💠 +${{world:150,epic:500,mythic:1500}[bi.kind]} · 💎 +${{world:1,epic:5,mythic:15}[bi.kind]}</div>
+            <div class="st">⏳ исчезнет через ${hh}:${mr}:${sr}</div>
+          </div>
+          ${done?"<span class='st' style='color:#7fd17f'>✔ БОСС ДОБИТ — жди следующего окна</span>":`<button class="buy" ${(RAID.active||S.torches<=0)?"disabled ":""} data-fn="${btn}">⚔ НАПАСТЬ (−1 🔥)</button>`}
+        </div>`;
+      });
+      h+=`
       <div class="card">
         <div class="info">
           <div class="nm">${S.opp.n} ${"★".repeat(S.opp.t)}</div>
-          <div class="st">3 стража · 45 сек на всех. Победа: +50 Славы, грабёж, шанс украсть монстра.</div>
+          <div class="st">Сложность ≈ этаж ${starFloor(S.opp.t)} · 3 стража · 45 сек. Победа: золото и Слава по звёздам, шанс украсть монстра.</div>
         </div>
         <button class="buy" data-fn="rollOpp">🎲</button>
       </div>
@@ -2519,6 +2604,9 @@ function attachDelegated(){
       }
       else if(f==="rollOpp"){ rollOpp(); haptic("select"); }
       else if(f==="startRaid"){ startRaid(); haptic("impact","heavy"); }
+      else if(f==="startWorld"){ startRaid("world"); haptic("impact","heavy"); }
+      else if(f==="startEpic"){ startRaid("epic"); haptic("impact","heavy"); }
+      else if(f==="startMythic"){ startRaid("mythic"); haptic("impact","heavy"); }
       else if(f==="openJoin"){ openJoinBook(); }
       else if(f.startsWith("joinClan_")){ if(joinById(+f.slice(9))) renderList(); }
       else if(f==="clanLeave"){ leaveClan(); }
@@ -2662,6 +2750,7 @@ setInterval(()=>{
       else if(f.startsWith("buyHero")){ const p=heroPlan(+f.slice(7)); b.disabled=p.n<1||S.gold<p.total; if(S.buyQty==="max") b.textContent="💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""); }
       else if(f.startsWith("buyTal_")) b.disabled=talPlan(f.slice(7)).k<1;
       else if(f==="startRaid") b.disabled=RAID.active||S.torches<=0||S.floor<3;
+      else if(f==="startWorld"||f==="startEpic"||f==="startMythic") b.disabled=RAID.active||S.torches<=0||S.floor<3;
       else if(f==="clanHit") b.disabled=RAID.active||S.torches<=0||S.clan.id<0||S.clan.hitsToday>=3||S.clan.bossHp<=0||S.floor<3;
       else if(f==="clanLeave") b.disabled=RAID.active&&RAID.kind==="clan";
       else if(f==="claimChest") b.disabled=!(S.clan.id>=0&&S.clan.chest);
