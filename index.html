@@ -1627,7 +1627,7 @@ function tick(now){
     const rd=totalDps(false)*(1+clanBonus("raid"))*dt; // в рейде анти-столла нет — будет stakes
     RAID.hp-=rd; RAID.dmg=(RAID.dmg||0)+rd; // 🌠 босс-гонка: копим весь нанесённый урон
     if(RAID.hp<=0){ RAID.hp=0; killStrazh(now); }
-    else if(now>=RAID.tEnd){ (RAID.race?winRaceRaid(true):loseRaid)(); }
+    else if(now>=RAID.tEnd){ if(RAID.race) winRaceRaid(true); else loseRaid(); }
   } else if(M.info){
     let dps=totalDps(M.info.kind==="boss");
     dps=Math.max(dps,M.hp*0.005); // анти-столл: дед поможет киркой
