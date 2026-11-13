@@ -968,7 +968,7 @@ function achRewardTxt(r){
 }
 let bookTab="ach"; // вкладка книги: "ach" достижения / "best" бестиарий
 let questTab="daily"; // вкладка квестов: "daily" / "weekly"
-let warTab="raid"; // внутренняя вкладка КЛАНА: "raid" рейды / "clan" клан
+let warTab="clan"; // внутренняя вкладка КЛАНА: "clan" клан / "raid" рейды
 let clanCreateName=null; // 🏰 имя в процессе создания своего клана (шаг 1 → выбор баффа)
 let clanBuffAdd=false; // 🏰 режим покупки дополнительного баффа для своего клана
 function bookTabBar(){
@@ -2212,8 +2212,8 @@ function renderList(){
         +"border:1px solid "+(act?"#7a5c14":"#352a5e")+"; border-radius:8px;'>"+label+"</button>";
     }
     let h="<div style='display:flex; gap:6px; margin-bottom:8px;'>"
-      +wtabBtn("raid","⚔ РЕЙДЫ",warTab==="raid")
       +wtabBtn("clan","🏰 КЛАН",warTab==="clan")
+      +wtabBtn("raid","⚔ РЕЙДЫ",warTab==="raid")
       +"</div>";
     if(warTab==="clan"){
       const c=S.clan;
