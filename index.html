@@ -2457,7 +2457,7 @@ function renderList(){
         <div class="card">
           <div class="info">
             <div class="nm">${nm} ${"★".repeat(bi.stars)}</div>
-            <div class="st">🌠 Босс-гонка — доступен всем! HP ≈ этаж ${starFloor(bi.stars)} · ${dur} сек. Весь урон → награда: 💠 до ${{world:150,epic:500,mythic:1500}[bi.kind]} · 💎 +${{world:1,epic:5,mythic:15}[bi.kind]} (полное убийство ×2)</div>
+            <div class="st">🌠 Босс-гонка — доступен всем! HP ≈ этаж ${starFloor(bi.stars)} · ${dur} сек. Весь урон → награда: 💠 до ${{world:450,epic:1500,mythic:4500}[bi.kind]} · 💎 +${{world:1,epic:5,mythic:15}[bi.kind]} (полное убийство ×2)</div>
             <div class="st">⏳ исчезнет через ${hh}:${mr}:${sr}</div>
           </div>
           ${done?"<span class='st' style='color:#7fd17f'>✔ БОСС ДОБИТ — жди следующего окна</span>":`<button class="buy" ${(RAID.active||S.torches<=0)?"disabled ":""} data-fn="${btn}">⚔ НАПАСТЬ (−1 🔥)</button>`}
