@@ -211,6 +211,23 @@ const HERO_SK=[
  "25 ур: золото ×5",
  "25 ур: каждый тап +1% тап-урона навсегда",
 ];
+/* 🌍 английские имена героев и описаний умений (индексы совпадают с HEROES/HERO_SK) */
+const HERO_EN_N=["Rusty Slime","Mad Jester","Debt Smith","Dumb Ogre","Executioner Girl","Swamp Witch","Holy Hermit","Assassin Penguin","Fuse Dragonling","Gramps the Lich","Dark Manager","Endless Butcher"];
+const HERO_SK_EN=[
+ "25 lvl: gold +10%",
+ "25 lvl: once a minute tap ×1.5 for 10 sec",
+ "25 lvl: ×2 vs bosses (50 lvl: ×3)",
+ "25 lvl: crit 5%/×5 (50 lvl: 10%)",
+ "25 lvl: kill chains (coming in a patch)",
+ "25 lvl: poison the whole floor — 20% of her DPS",
+ "25 lvl: boss timer +5 sec",
+ "25 lvl: crit +3% globally (50 lvl: +7%)",
+ "25 lvl: EXHALE once/min — 30 sec of his DPS",
+ "50 lvl: all heroes +25% damage",
+ "25 lvl: gold ×5",
+ "25 lvl: every tap +1% tap damage forever",
+];
+function HN(i){ return T(HEROES[i].nm, HERO_EN_N[i]); } // 🌍 имя героя по языку
 const MAX_FLOOR=20000; // потолок эпохи: этажи выше не генерируются
 const CORRUPTION_FLOOR=150; // с какого этажа начинается коррупция башни
 const CORRUPTION_PER_FLOOR=0.008; // +0.8% HP монстров за этаж выше порога
@@ -2329,28 +2346,28 @@ function renderList(){
       </div></div>`;
   }
   if(curTab==="heroes"){
-    let h=qtyBarWrap()+`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. На 25 ур у героя открывается умение (у части — усиленное на 50). MAX покупает, сколько потянеш.</div>`;
+    let h=qtyBarWrap()+`<div class="small" style="margin-bottom:6px">${T("Герои бьют сами каждую секунду. На 25 ур у героя открывается умение (у части — усиленное на 50). MAX покупает, сколько потянеш.","Heroes strike on their own every second. At 25 lvl a hero unlocks a skill (some get a stronger one at 50). MAX buys as many as you can afford.")}</div>`;
     HEROES.forEach(hr=>{
       const l=S.heroLvl[hr.id], cost=heroCost(hr.id), dps=l?fmt(heroDps(hr.id)):0;
-      const bossTag=(hr.id===2&&l>=25)?(((wallOn())||l>=50)?" | ×3 по боссам":" | ×2 по боссам"):"";
-      const blood=(bloodSynergy()&&(hr.id===0||hr.id===3))?" | 🔗 КРОВОПИЙЦЫ!":"";
-      const lichPic=(hr.id===9&&l>=50)?(" | все герои +"+(covenOn()?35:25)+"%"):"";
-      const prU=(prUnion()&&(hr.id===10||hr.id===11))?" | 🤝 ПРЕСТУПНЫЙ СОЮЗ":"";
+      const bossTag=(hr.id===2&&l>=25)?(((wallOn())||l>=50)?T(" | ×3 по боссам"," | ×3 vs bosses"):T(" | ×2 по боссам"," | ×2 vs bosses")):"";
+      const blood=(bloodSynergy()&&(hr.id===0||hr.id===3))?T(" | 🔗 КРОВОПИЙЦЫ!"," | 🔗 BLOODSUCKERS!"):"";
+      const lichPic=(hr.id===9&&l>=50)?(T(" | все герои +"," | all heroes +")+(covenOn()?35:25)+"%"):"";
+      const prU=(prUnion()&&(hr.id===10||hr.id===11))?T(" | 🤝 ПРЕСТУПНЫЙ СОЮЗ"," | 🤝 CRIMINAL UNION"):"";
       h+=`<div class="card ${l?"owned":""}">
         <div class="info">
-          <div class="nm">${hr.nm} <span class="small">${l?"ур."+l:"не нанят"}</span></div>
-          <div class="st">${l?("DPS: "+dps):("найм за "+fmt(hr.unlock)+" золота")}${bossTag}${blood}${lichPic}${prU}</div>
-          <div class="st small">${HERO_SK[hr.id]}</div>
+          <div class="nm">${HN(hr.id)} <span class="small">${l?T("ур.","lvl")+l:T("не нанят","not hired")}</span></div>
+          <div class="st">${l?("DPS: "+dps):(T("найм за ","hire for ")+fmt(hr.unlock)+" "+T("золота","gold"))}${bossTag}${blood}${lichPic}${prU}</div>
+          <div class="st small">${T(HERO_SK[hr.id], HERO_SK_EN[hr.id])}</div>
         </div>
         ${buyBtn("💰 "+fmt(heroPlan(hr.id).total)+(heroPlan(hr.id).n>1?" ×"+heroPlan(hr.id).n:""), heroPlan(hr.id).n>0&&S.gold>=heroPlan(hr.id).total, "buyHero"+hr.id)}
       </div>`;
     });
-    h+=`<h3 class="sec">🔗 СВЯЗКИ</h3>`;
-    [{nm:"Кровопийцы", on:bloodSynergy(), req:"Слизень 25 ур + Огр 25 ур", gain:"оба ×2 DPS"},
-     {nm:"Клоунада", on:clownOn(), req:"Шут 50 ур + Пингвин 50 ур", gain:"тап ×2, крит ×2"},
-     {nm:"Ведьмин Ковен", on:covenOn(), req:"Ведьма 50 ур + Личь 50 ур", gain:"яд ×2, бафф Лича +35%"},
-     {nm:"Святая Стена", on:wallOn(), req:"Кузнец 50 ур + Отшельник 50 ур", gain:"босс-таймер +7 сек, Кузнец ×3"},
-     {nm:"Преступный Союз", on:prUnion(), req:"Управляющий 100 ур + Мясник 100 ур", gain:"золото ×1.5, DPS ×1.25"},
+    h+=`<h3 class="sec">${T("🔗 СВЯЗКИ","🔗 SYNERGIES")}</h3>`;
+    [{nm:T("Кровопийцы","Bloodsuckers"), on:bloodSynergy(), req:T("Слизень 25 ур + Огр 25 ур","Slime 25 lvl + Ogre 25 lvl"), gain:T("оба ×2 DPS","both ×2 DPS")},
+     {nm:T("Клоунада","Clownade"), on:clownOn(), req:T("Шут 50 ур + Пингвин 50 ур","Jester 50 lvl + Penguin 50 lvl"), gain:T("тап ×2, крит ×2","tap ×2, crit ×2")},
+     {nm:T("Ведьмин Ковен","Witches' Coven"), on:covenOn(), req:T("Ведьма 50 ур + Личь 50 ур","Witch 50 lvl + Lich 50 lvl"), gain:T("яд ×2, бафф Лича +35%","poison ×2, Lich buff +35%")},
+     {nm:T("Святая Стена","Holy Wall"), on:wallOn(), req:T("Кузнец 50 ур + Отшельник 50 ур","Smith 50 lvl + Hermit 50 lvl"), gain:T("босс-таймер +7 сек, Кузнец ×3","boss timer +7 sec, Smith ×3")},
+     {nm:T("Преступный Союз","Criminal Union"), on:prUnion(), req:T("Управляющий 100 ур + Мясник 100 ур","Manager 100 lvl + Butcher 100 lvl"), gain:T("золото ×1.5, DPS ×1.25","gold ×1.5, DPS ×1.25")},
     ].forEach(c=>{
       h+=`<div class="tal ${c.on?"done":""}"><span><b>${c.on?"🔗":"🔒"} «${c.nm}»</b><br><span class="small">${c.req} → ${c.gain}</span></span></div>`;
     });
