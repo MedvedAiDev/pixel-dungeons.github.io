@@ -96,6 +96,7 @@
     <span class="donate" id="donLbl">💎 0</span>
     <span class="blood" id="bloodLbl">🩸 0</span>
     <span id="restartBtn" style="cursor:pointer" title="С начала этажа (пересдача)">↺</span>
+    <span id="langBtn" style="cursor:pointer" title="Язык / Language">RU</span>
     <span id="muteBtn" style="cursor:pointer" title="Звук">🔊</span>
   </div>
 
@@ -167,6 +168,19 @@
 
 <script>
 "use strict";
+/* 🌍 локализация: русский живёт в коде, T(ru,en) подставляет английский при S.lang==="en" */
+function T(ru,en){ return (S&&S.lang==="en"&&en)||ru; }
+const TAB_LBL={ tap:["🐰 КРОЛЁНКА","🐰 KROLYONKA"], heroes:["🛡 ГЕРОИ","🛡 HEROES"],
+  souls:["👻 ДУШИ","👻 SOULS"], clan:["🏰 КЛАН","🏰 CLAN"],
+  shop:["💎 ЛАВКА","💎 SHOP"], quests:["📋 КВЕСТЫ","📋 QUESTS"] };
+function syncLang(){ // 🌍 перерисовать языковые надписи: вкладки, HUD
+  document.querySelectorAll("#tabs button").forEach(b=>{
+    const pair=TAB_LBL[b.dataset.tab]; if(!pair) return;
+    b.innerHTML=pair[S.lang==="en"?1:0]+(b.dataset.tab==="quests"?'<span id="qbBadge" class="badge" style="display:none"></span>':"");
+  });
+  const lb=document.getElementById("langBtn"); if(lb) lb.textContent=(S&&S.lang==="en")?"EN":"RU";
+  try{ refreshHud(); }catch(e){}
+}
 /* ================= ДАННЫЕ ================= */
 const HEROES = [
   { id:0,  nm:"Слизень Ржавый",      base:1,       unlock:50 },
@@ -463,6 +477,7 @@ let S = null;
 function freshState(){
   return {
     gold:0, souls:0, floor:1, runBest:1, tapLvl:0,
+    lang:(function(){ try{ const u=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.user; return (u&&u.language_code&&String(u.language_code).toLowerCase().startsWith("en"))?"en":"ru"; }catch(e){ return "ru"; } })(), // 🌍 язык: из Telegram, по умолчанию русский
     heroLvl:[0,0,0,0,0,0,0,0,0,0,0,0],
     tapStacks:0, breathT:0, clownT:0, clownB:0,
     kroll:{crit:0, chain:0, auto:0}, // 🐰 дерево Кролёнки: крит, Контроша, автотап
@@ -509,6 +524,7 @@ function load(){
   if(typeof S.clan.pot!=="number") S.clan.pot=0; // 🙏 котёл клана
   if(!S.kroll||typeof S.kroll!=="object") S.kroll={crit:0,chain:0,auto:0}; // 🐰 дерево Кролёнки (миграция)
   ["crit","chain","auto"].forEach(k=>{ if(typeof S.kroll[k]!=="number"||S.kroll[k]<0) S.kroll[k]=0; });
+  if(S.lang!=="en") S.lang="ru"; // 🌍 язык: только ru/en
   if(typeof S.clan.lvl!=="number") S.clan.lvl=0; // 🏰 уровень членства (0 = не установлен, берётся из CLANS)
   if(S.customClan!==undefined && S.customClan!==null && (typeof S.customClan!=="object"||!S.customClan.custom)) S.customClan=null;
   if(S.customClan&&S.customClan.custom){ // 🏰 свой клан возвращается в список как 7-й
@@ -995,6 +1011,8 @@ function sfxPrestige(){
 }
 function syncMute(){ muteBtnEl.textContent=muted?"🔇":"🔊"; }
 muteBtnEl.addEventListener("click",()=>{ muted=!muted; if(S)S.muted=muted; syncMute(); audio(); haptic("select"); });
+const langBtnEl=document.getElementById("langBtn");
+langBtnEl.addEventListener("click",()=>{ S.lang=(S.lang==="en")?"ru":"en"; syncLang(); save(); haptic("select"); try{ renderList(); }catch(e){} });
 /* ===== книга достижений: кнопка 🏆 в HUD, открытие/закрытие ===== */
 const achBtnEl=document.getElementById("achBtn");
 const achBookEl=document.getElementById("achBook");
@@ -1156,7 +1174,7 @@ function heroFx(i){
   heroFlash[i]=performance.now();
   const x=SQUAD[i].x*CW;
   for(let k=0;k<12;k++) parts.push({x,y:CH*0.72,vx:(Math.random()-0.5)*180,vy:-Math.random()*220,l:0.7,c:pick(["#ffd75e","#ffffff","#ff9f43"])});
-  addFloat(x,CH*0.64,"ур."+Math.max(1,S.heroLvl[i]),true);
+  addFloat(x,CH*0.64,T("ур.","lvl")+Math.max(1,S.heroLvl[i]),true);
 }
 function tapFx(){
   addFloat(CW*0.5,CH*0.62,"КРОЛЁНКА ур "+(S.tapLvl+1),true); // главный герой бьёт из центра линии
@@ -2080,7 +2098,7 @@ function draw(now){
     drawWavePips();
   } else {
     ctx.fillStyle="#4a3660"; ctx.font="16px monospace"; ctx.textAlign="center";
-    ctx.fillText("в следующий этаж…", CW/2, CH*0.60);
+    ctx.fillText(T("в следующий этаж…","next floor…"), CW/2, CH*0.60);
   }
 
   /* ---- Отряд героев (только в данже, не поверх рейда) ---- */
@@ -2108,7 +2126,7 @@ function draw(now){
     }
     // метка уровня
     ctx.fillStyle="rgba(232,224,208,0.55)"; ctx.font="8px monospace";
-    ctx.fillText("ур."+S.heroLvl[h.i], h.x*CW, footY+13);
+    ctx.fillText(T("ур.","lvl")+S.heroLvl[h.i], h.x*CW, footY+13);
     // вспышка при повышении уровня
     const ft=now-heroFlash[h.i];
     if(ft<280){ ctx.globalAlpha=(1-ft/280)*0.85; drawSpr(map,cx,cy,h.s,"FLASH"); ctx.globalAlpha=1; }
@@ -2125,7 +2143,7 @@ function draw(now){
   drawSpr(kmap,kx,ky,2.6);
   if(kAtk&&M.info){ ctx.fillStyle="rgba(255,255,255,0.65)"; ctx.fillRect(kx-4,ky-8,8,2); }
   ctx.fillStyle="#ffd75e"; ctx.font="8px monospace";
-  ctx.fillText("ур."+(S.tapLvl+1), kx, kFoot+13);
+  ctx.fillText(T("ур.","lvl")+(S.tapLvl+1), kx, kFoot+13);
   }
 
   for(let i=parts.length-1;i>=0;i--){
@@ -2248,7 +2266,7 @@ setInterval(function(){ try{
 const $=id=>document.getElementById(id);
 function refreshHud(){
   const boss=M.info&&M.info.kind==="boss";
-  $("floorLbl").textContent="Этаж "+S.floor+(boss?" — БОСС":" · Волна "+S.wave+"/10");
+  $("floorLbl").textContent=T("Этаж","Floor")+" "+S.floor+(boss?T(" — БОСС"," — BOSS"):T(" · Волна"," · Wave")+" "+S.wave+"/10");
   $("goldLbl").textContent=fmt(S.gold);
   $("soulsLbl").textContent="👻 "+S.souls;
   $("donLbl").textContent="💎 "+S.don;
@@ -2944,6 +2962,7 @@ window.addEventListener("error",function(e){
   }catch(_){}
 },true);
 load();
+syncLang(); // 🌍 язык: вкладки и HUD по сейву/Telegram
 try{ checkProg(); }catch(err){ console.error(err); } // миграция старых ачивок + оффлайн-ступени
 regenTorches();
 spawnFloor();
@@ -2954,7 +2973,7 @@ if(TG){
   /* в Telegram: сперва миримилим облачный сейв и локальный, потом разрешаем записи в облако */
   tgRestore(function(){
     BOOT_OK=true;
-    muted = !!S.muted; syncMute();
+    muted = !!S.muted; syncMute(); syncLang();
     regenTorches(); spawnFloor();
     refreshHud(); renderList();
     tgGreet();
