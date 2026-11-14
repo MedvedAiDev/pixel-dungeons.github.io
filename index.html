@@ -74,7 +74,7 @@
   .buy { background:#3d2f0a; color:#ffd75e; border:1px solid #7a5c14; border-radius:6px;
     padding:8px 10px; font-family:inherit; font-size:12px; font-weight:bold; cursor:pointer; min-width:86px; }
   .buy:disabled { background:#241f33; color:#5d5578; border-color:#352a5e; cursor:default; }
-  .buy.ready { background:#5a4410; animation:pulse 1.2s infinite; }
+  .buy.ready { background:#5a4410; } /* без пульсации — мигание отвлекает */
   @keyframes pulse { 50% { box-shadow:0 0 6px 1px #ffd75e88; } }
   h3.sec { font-size:12px; color:#8f7cff; margin:8px 0 5px; letter-spacing:1px; }
   .tal { display:flex; justify-content:space-between; align-items:center; background:#211a3e;
@@ -154,7 +154,7 @@
 
   <div id="panel">
     <div id="tabs">
-      <button data-tab="tap" class="active">✊ КУЛАК</button>
+      <button data-tab="tap" class="active">🐰 КРОЛЁНКА</button>
       <button data-tab="heroes">🛡 ГЕРОИ</button>
       <button data-tab="souls">👻 ДУШИ</button>
       <button data-tab="clan">🏰 КЛАН</button>
@@ -506,6 +506,7 @@ function load(){
   if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
   if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
   if(typeof S.clan.pot!=="number") S.clan.pot=0; // 🙏 котёл клана
+  if(typeof S.clan.lvl!=="number") S.clan.lvl=0; // 🏰 уровень членства (0 = не установлен, берётся из CLANS)
   if(S.customClan!==undefined && S.customClan!==null && (typeof S.customClan!=="object"||!S.customClan.custom)) S.customClan=null;
   if(S.customClan&&S.customClan.custom){ // 🏰 свой клан возвращается в список как 7-й
     if(!Array.isArray(S.customClan.buffs)){ // миграция: раньше был один бафф b/bTxt
@@ -1117,19 +1118,19 @@ restartBtnEl.addEventListener("click",()=>{
 let flashT=0;
 const heroFlash=[0,0,0,0,0,0,0,0,0,0,0,0];
 const SQUAD=[
-  {i:0, map:"slime",  x:0.042,s:2.2,ov:{g:"#3fb0a0",G:"#2b7a70"}},   // Слизень Ржавый
-  {i:1, map:"clown",  x:0.125,s:2.3},                                  // Шут Помешанный
-  {i:2, map:"kuznec", x:0.208,s:2.4},                                  // Кузнец Долга
-  {i:3, map:"ogre",   x:0.292,s:2.6,ov:{g:"#7aa84f"}},                 // Огр Тупой
-  {i:4, map:"girl",   x:0.375,s:2.3,ov:{p:"#5a2a6e"}},                 // Девочка-Палач
-  {i:5, map:"witch",  x:0.458,s:2.3},                                  // Ведьма Болотная
-  {i:6, map:"hermit", x:0.542,s:2.3},                                  // Святой Отшельник
-  {i:7, map:"pen",    x:0.625,s:2.2},                                  // Пингвин-Ассасин
-  {i:8, map:"dragon", x:0.708,s:2.0},                                  // Дракончик Фитиль
-  {i:9, map:"lich",   x:0.792,s:2.3},                                  // Личь Дед
-  {i:10,map:"mgr",    x:0.875,s:2.3},                                  // Тёмный Управляющий
-  {i:11,map:"butcher",x:0.958,s:2.4},                                  // Бесконечный Мясник
-];
+  {i:0, map:"slime",  x:0.071,s:2.2,ov:{g:"#3fb0a0",G:"#2b7a70"}},   // Слизень Ржавый
+  {i:1, map:"clown",  x:0.143,s:2.3},                                  // Шут Помешанный
+  {i:2, map:"kuznec", x:0.214,s:2.4},                                  // Кузнец Долга
+  {i:3, map:"ogre",   x:0.286,s:2.6,ov:{g:"#7aa84f"}},                 // Огр Тупой
+  {i:4, map:"girl",   x:0.357,s:2.3,ov:{p:"#5a2a6e"}},                 // Девочка-Палач
+  {i:5, map:"witch",  x:0.429,s:2.3},                                  // Ведьма Болотная
+  {i:6, map:"hermit", x:0.571,s:2.3},                                  // Святой Отшельник
+  {i:7, map:"pen",    x:0.643,s:2.2},                                  // Пингвин-Ассасин
+  {i:8, map:"dragon", x:0.714,s:2.0},                                  // Дракончик Фитиль
+  {i:9, map:"lich",   x:0.786,s:2.3},                                  // Личь Дед
+  {i:10,map:"mgr",    x:0.857,s:2.3},                                  // Тёмный Управляющий
+  {i:11,map:"butcher",x:0.929,s:2.4},                                  // Бесконечный Мясник
+]; // ровная линия, центр (0.5) пуст — там встанет главный герой
 function heroFx(i){
   heroFlash[i]=performance.now();
   const x=SQUAD[i].x*CW;
@@ -1137,8 +1138,8 @@ function heroFx(i){
   addFloat(x,CH*0.64,"ур."+Math.max(1,S.heroLvl[i]),true);
 }
 function tapFx(){
-  addFloat(CW*0.42,CH*0.62,"КУЛАК ур "+(S.tapLvl+1),true);
-  for(let k=0;k<10;k++) parts.push({x:CW*0.42,y:CH*0.66,vx:(Math.random()-0.5)*160,vy:-Math.random()*180,l:0.6,c:"#ffd75e"});
+  addFloat(CW*0.5,CH*0.62,"КРОЛЁНКА ур "+(S.tapLvl+1),true); // главный герой бьёт из центра линии
+  for(let k=0;k<10;k++) parts.push({x:CW*0.5,y:CH*0.66,vx:(Math.random()-0.5)*160,vy:-Math.random()*180,l:0.6,c:"#ffd75e"});
 }
 function bigBurst(){
   for(let i=0;i<30;i++) parts.push({x:CW/2+(Math.random()-0.5)*90,y:CH*0.55+(Math.random()-0.5)*70,
@@ -1318,27 +1319,26 @@ const CLANS=[
 const GLORY_COST=[20000,30000,45000,68000,100000,150000,225000,340000,500000]; // цена уровня 2..10 (в котле клана)
 function clanLvl(){
   if(S.clan.id<0) return 1;
-  if(CLANS[S.clan.id]&&CLANS[S.clan.id].custom) return (S.customClan&&S.customClan.lvl)||1;
-  return CLANS[S.clan.id].lvl||1;
+  if(typeof S.clan.lvl==="number"&&S.clan.lvl>=1) return S.clan.lvl; // уровень текущего членства
+  return (CLANS[S.clan.id]&&CLANS[S.clan.id].lvl)||1;
 }
 function clanLvlCost(){ return GLORY_COST[(clanLvl()||1)-1]||0; }
 function clanSlots(lvl){ // 🏰 слоты участников: ур.1=30, +10 за уровень → ур.10=120
   return 30+10*((lvl||clanLvl()||1)-1);
 }
-function clanPot(){ // 🙏 котёл клана — общая копилка Славы
+function clanPot(){ // 🙏 котёл клана — общая копилка Славы (любой клан)
   if(S.clan.id<0) return 0;
-  const cl=CLANS[S.clan.id];
-  if(cl&&cl.custom) return S.clan.pot||0;
-  const g=ghostSeed(S.clan.wk||0,S.clan.id+31); return 400+(g.h%1800)+(dayIdx_w()%7)*260; // у призраков — симуляция
+  return S.clan.pot||0;
 }
-function addClanPot(n){ // 🙏 взнос в котёл своего клана (принимает и −)
+function addClanPot(n){ // 🙏 взнос в котёл текущего клана (принимает и −)
   if(S.clan.id<0) return;
+  S.clan.pot=Math.max(0,(S.clan.pot||0)+(n||0));
   const cl=CLANS[S.clan.id];
-  if(cl&&cl.custom){ S.clan.pot=Math.max(0,(S.clan.pot||0)+(n||0)); if(S.customClan) S.customClan.pot=S.clan.pot; }
+  if(cl&&cl.custom&&S.customClan) S.customClan.pot=S.clan.pot; // свой клан хранит котёл между выходами
 }
 function donateGlory(){ // 🙏 пожертвовать 300 💠 личной Славы в котёл — раз в день
   if(S.clan.id<0) return;
-  const cl=CLANS[S.clan.id]; if(!cl||!cl.custom) return;
+  const cl=CLANS[S.clan.id]; if(!cl) return;
   if(S.donDay===dayIdx_w()){ ded("🙏 Сегодня ты уже жертвовал в котёл. Возвращайся завтра."); haptic("select"); return; }
   if(S.glory<300){ ded("💠 Нужно 300 Славы — сходи в рейд."); haptic("notify","error"); return; }
   S.glory-=300; addClanPot(300); S.donDay=dayIdx_w();
@@ -1485,7 +1485,7 @@ function clanSim(){
     ded("🏰 Новая неделя «Башни Тысячи Этажей»! Зачёт обнулился, босс клана свежий — успей отыграть.");
   }
   if(S.clan.day!==dayIdx_w()){ S.clan.day=dayIdx_w(); S.clan.hitsToday=0;
-    if(S.clan.id>=0&&CLANS[S.clan.id]&&CLANS[S.clan.id].custom){ // 🙏 бойцы клана ежедневно подкидывают в котёл
+    if(S.clan.id>=0&&CLANS[S.clan.id]){ // 🙏 бойцы клана ежедневно подкидывают в котёл (любой клан)
       const n=(CLANS[S.clan.id].mem||2)*100; addClanPot(n);
       ded("🙏 Бойцы клана внесли в котёл "+fmt(n)+" 💠 Славы. В котле: "+fmt(clanPot())+".");
     }
@@ -1520,6 +1520,7 @@ function joinClan(id){
   S.clan.bossMax=clanMax(S.clan.wk); S.clan.bossHp=S.clan.bossMax;
   S.clan.chest=0; S.clan.hitsToday=0; S.clan.day=dayIdx_w(); S.clan.lastSim=Date.now(); S.clan.war=false;
   S.clan.pot=(CLANS[id]&&CLANS[id].custom&&S.customClan)?(S.customClan.pot||0):0; // 🙏 котёл: свой клан хранит накопления
+  S.clan.lvl=(CLANS[id]&&CLANS[id].lvl)||1; // 🏰 уровень членства (у призраков растёт из котла, сгорает при выходе)
   S.tutFlags.clan=true;
   ded("«"+CLANS[id].n+"» принимает тебя, наследник! "+CLANS[id].motto);
   sfxBuy(); save(); renderList(); refreshHud();
@@ -1550,7 +1551,7 @@ function leaveClan(){ // 🚪 выход из клана: окно-предуп�
 function doLeaveClan(){ // сам выход: обнуление недели + штраф 24 ч
   const nm=CLANS[S.clan.id]?CLANS[S.clan.id].n:"";
   if(S.customClan&&CLANS[S.clan.id]&&CLANS[S.clan.id].custom) S.customClan.pot=S.clan.pot||0; // 🙏 котёл своего клана сохраняется
-  S.clan.id=-1; S.clan.pts=0; S.clan.contrib=0; S.clan.bossMax=0; S.clan.bossHp=0; S.clan.pot=0;
+  S.clan.id=-1; S.clan.pts=0; S.clan.contrib=0; S.clan.bossMax=0; S.clan.bossHp=0; S.clan.pot=0; S.clan.lvl=0;
   S.clan.chest=0; S.clan.war=false; S.clan.hitsToday=0; S.clan.lastSim=Date.now();
   S.clanCd=Date.now()+24*3600e3; // ⏳ 24 часа штрафа на вступление
   ded("🚪 Ты покинул клан «"+nm+"». 24 часа башня не пускает ни в один клан.");
@@ -1722,8 +1723,22 @@ const ctx=cv.getContext("2d");
 const CW=360, CH=340;
 cv.width=CW; cv.height=CH;
 const PAL={ g:"#4a9e3f",G:"#2d7a26",p:"#7a4a9e",w:"#e8e4d8",k:"#191019",
-            r:"#d84a3a",y:"#ffd75e",b:"#8a5a30",o:"#e07b2a" };
+            r:"#d84a3a",y:"#ffd75e",b:"#8a5a30",o:"#e07b2a",F:"#e88aa8",f:"#f7c6d4" };
 const SPRITES={
+ krolyonka:[ // Кролёнка — главный герой (девочка-кролик), стоит в центре линии
+ "............",
+ "..wF.....Fw.",
+ "..wF.....Fw.",
+ "..ww.....ww.",
+ ".wwwwwwwwww.",
+ ".wwwwwwwwww.",
+ ".wwkwwwwkww.",
+ ".wwwwffwwww.",
+ "..wwwwwwww..",
+ "..FyFFFFyF..",
+ ".FFFFFFFFFF.",
+ "..ww....ww..",
+ "..kk....kk.."],
  slime:[
  "............",
  "....gggg....",
@@ -2073,6 +2088,18 @@ function draw(now){
     const ft=now-heroFlash[h.i];
     if(ft<280){ ctx.globalAlpha=(1-ft/280)*0.85; drawSpr(map,cx,cy,h.s,"FLASH"); ctx.globalAlpha=1; }
   });
+  /* Кролёнка — главный герой в центре линии, бьёт с каждым тапом */
+  const kmap=SPRITES.krolyonka, kHalf=kmap.length*2.6/2;
+  const kAtk=(now-lastTap)<180;
+  const kB=kAtk?Math.sin(now/40)*2:Math.sin(now/280)*2;
+  const kDy=kAtk?-6:0;                                    // выпад вверх, к монстру
+  const kx=CW*0.5, ky=HY-kB-kHalf+kDy;
+  ctx.fillStyle="rgba(0,0,0,0.30)";
+  ctx.beginPath(); ctx.ellipse(kx,HY+2,13,3.5,0,0,Math.PI*2); ctx.fill();
+  drawSpr(kmap,kx,ky,2.6);
+  if(kAtk&&M.info){ ctx.fillStyle="rgba(255,255,255,0.65)"; ctx.fillRect(kx-4,ky-8,8,2); }
+  ctx.fillStyle="#ffd75e"; ctx.font="8px monospace";
+  ctx.fillText("ур."+(S.tapLvl+1), kx, HY+13);
   }
 
   for(let i=parts.length-1;i>=0;i--){
@@ -2219,7 +2246,7 @@ function renderList(){
     content.innerHTML=qtyBarWrap()+`
       <div class="card">
         <div class="info">
-          <div class="nm">Кулак Крушителя ур.${S.tapLvl+1}</div>
+          <div class="nm">Кролёнка ур.${S.tapLvl+1} <span class="small">главный герой</span></div>
           <div class="st">Тап-урон: ${fmt(tapDmg())} | Герои DPS: ${fmt(totalDps(M.info&&M.info.kind==="boss"))}</div>
           <div class="st small">5 быстрых тапов → 6-й бьёт ×3 («Контроша»)</div>
         </div>
@@ -2389,22 +2416,22 @@ function renderList(){
         </div>
         ${cl.custom?`<button class="buy" data-fn="clanDescEdit">✏ ОПИСАНИЕ</button>`:""}
         </div>
-        ${cl.custom?`
         <div class="card"><div class="info">
           <div class="nm">🙏 КОТЁЛ КЛАНА <span class="small">общая копилка Славы</span></div>
           <div class="st">В котле: 💠 ${fmt(clanPot())}${clanLvl()<10?(" · до ур."+(clanLvl()+1)+": "+fmt(clanLvlCost())+" 💠"):" · клан максимального уровня"}</div>
           ${clanLvl()<10?`<div style="height:8px;background:#2a1e3e;border:1px solid #0e0a1a;border-radius:4px;margin:4px 0;overflow:hidden"><div style="height:100%;background:#7fd17f;width:${Math.min(100,clanPot()/clanLvlCost()*100).toFixed(1)}%"></div></div>`:""}
           <div class="st small">Копят все: твоё пожертвование (300 💠/день), штурмы босса (+30), трофеи (+150), 10% Славы рейдов и взносы бойцов. Личная Слава остаётся у тебя.</div>
+          ${cl.custom?"":`<div class="st small" style="color:#ff9d7a">⚠ У клана-призрака котёл и уровни сгорят при выходе.</div>`}
         </div>
         ${clanLvl()<10?`<button class="buy" ${(S.donDay===dayIdx_w()||S.glory<300)?"disabled ":""} data-fn="donateGlory">${S.donDay===dayIdx_w()?"🙏 СЕГОДНЯ УЖЕ ПОЖЕРТВОВАНО":"🙏 ПОЖЕРТВОВАТЬ 300 💠"}</button>`:""}
-        </div>`:""}
+        </div>
         <div class="card"><div class="info">
           <div class="nm">🏰 УРОВЕНЬ КЛАНА ${clanLvl()}/10</div>
           <div class="st">За уровень: +5% урона по боссу клана · +3% Славы с рейда · 👥 +10 слотов</div>
           <div class="st">Сейчас: +${((clanLvl()-1)*5)}% урона · +${((clanLvl()-1)*3)}% Славы · 👥 ${clanSlots()} слотов</div>
-          ${cl.custom?(clanLvl()<10?`<div class="st">Следующий уровень: 💠 ${fmt(clanLvlCost())} Славы из котла · 👥 ${clanSlots(clanLvl()+1)} слотов</div>`:""):`<div class="st small">У кланов-призраков уровень фиксированный</div>`}
+          ${clanLvl()<10?`<div class="st">Следующий уровень: 💠 ${fmt(clanLvlCost())} Славы из котла · 👥 ${clanSlots(clanLvl()+1)} слотов</div>`:""}
         </div>
-        ${cl.custom&&clanLvl()<10?`<button class="buy" ${clanPot()>=clanLvlCost()?"":"disabled "} data-fn="clanLvlUp">🏰 ПРОКАЧАТЬ — ${fmt(clanLvlCost())} 💠 ИЗ КОТЛА</button>`:(cl.custom?`<div class="st small" style="color:#7fd17f">✔ МАКС. УРОВЕНЬ</div>`:"")}
+        ${clanLvl()<10?`<button class="buy" ${clanPot()>=clanLvlCost()?"":"disabled "} data-fn="clanLvlUp">🏰 ПРОКАЧАТЬ — ${fmt(clanLvlCost())} 💠 ИЗ КОТЛА</button>`:`<div class="st small" style="color:#7fd17f">✔ МАКС. УРОВЕНЬ</div>`}
         </div>
         ${cl.custom?`
         <div class="card"><div class="info">
@@ -2727,11 +2754,12 @@ function attachDelegated(){
         ded("🏰 Клан «"+S.customClan.n+"» основан за 50 🩸! Стартовый бафф: "+buffTxt(key,1)+". Остальные баффы покупаются в клане.");
         haptic("notify","success");
       }
-      else if(f==="clanLvlUp"&&S.customClan&&clanLvl()<10&&clanPot()>=clanLvlCost()){ // 🏰 уровень клана — из котла клана
+      else if(f==="clanLvlUp"&&S.clan.id>=0&&CLANS[S.clan.id]&&clanLvl()<10&&clanPot()>=clanLvlCost()){ // 🏰 уровень клана — из котла (любой клан)
         const cost=clanLvlCost();
-        S.clan.pot=(S.clan.pot||0)-cost; if(S.customClan) S.customClan.pot=S.clan.pot;
-        S.customClan.lvl=(S.customClan.lvl||1)+1;
-        ded("🏰 Клан «"+S.customClan.n+"» вырос до "+S.customClan.lvl+" уровня! Урон по боссу клана +"+((S.customClan.lvl-1)*5)+"%, Слава с рейда +"+((S.customClan.lvl-1)*3)+"%, слоты участников: "+clanSlots()+".");
+        S.clan.pot=(S.clan.pot||0)-cost;
+        S.clan.lvl=(typeof S.clan.lvl==="number"&&S.clan.lvl>=1?S.clan.lvl:clanLvl())+1;
+        if(CLANS[S.clan.id].custom&&S.customClan) S.customClan.lvl=S.clan.lvl; // свой клан запоминает уровень навсегда
+        ded("🏰 Клан «"+CLANS[S.clan.id].n+"» вырос до "+clanLvl()+" уровня! Урон по боссу клана +"+((clanLvl()-1)*5)+"%, Слава с рейда +"+((clanLvl()-1)*3)+"%, слоты участников: "+clanSlots()+".");
         sfxBuy(); haptic("notify","success");
       }
       else if(f==="clanDescEdit"&&S.customClan){ // ✏ описание клана
@@ -2771,7 +2799,7 @@ const TUT=[
    chk:()=>S.tapsDone>=8},
  {nm:"Контроша",            txt:"5 БЫСТРЫХ тапов подряд — 6-й бьёт ×3 (увидишь надпись «КОНТРОША!»). Собери ритм.",
    chk:()=>S.tutFlags.kontra},
- {nm:"Апгрейд кулака",      txt:"Открой вкладку ✊ КУЛАК и купи апгрейд (25 💰) — тап-урон ×1.65 за уровень.",
+ {nm:"Апгрейд кулака",      txt:"Открой вкладку 🐰 КРОЛЁНКА и купи апгрейд (25 💰) — тап-урон ×1.65 за уровень.",
    chk:()=>S.tapLvl>=1},
  {nm:"Найм героя",          txt:"Вкладка 🛡 ГЕРОИ: найми Слизня Ржавого (50 💰) — герои бьют сами, каждую секунду.",
    chk:()=>S.heroLvl.some(v=>v>0)},
