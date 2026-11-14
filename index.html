@@ -1177,7 +1177,7 @@ function heroFx(i){
   addFloat(x,CH*0.64,T("ур.","lvl")+Math.max(1,S.heroLvl[i]),true);
 }
 function tapFx(){
-  addFloat(CW*0.5,CH*0.62,"КРОЛЁНКА ур "+(S.tapLvl+1),true); // главный герой бьёт из центра линии
+  addFloat(CW*0.5,CH*0.62,T("КРОЛЁНКА ур ","KROLYONKA lvl ")+(S.tapLvl+1),true); // главный герой бьёт из центра подковы
   for(let k=0;k<10;k++) parts.push({x:CW*0.5,y:CH*0.66,vx:(Math.random()-0.5)*160,vy:-Math.random()*180,l:0.6,c:"#ffd75e"});
 }
 function bigBurst(){
@@ -1742,10 +1742,10 @@ function onTap(ev){
   const critM=clownOn()?10:5;                                              // Клоунада: крит ×2
   const dmg=tapDmg()*mult*(crit?critM:1);
   if(RAID.active){
-    RAID.hp-=dmg; RAID.dmg=(RAID.dmg||0)+dmg; addFloat(x,y,(crit?"КРИТ ":"")+fmt(dmg),crit||mult>1); shake=Math.max(shake,0.1);
+    RAID.hp-=dmg; RAID.dmg=(RAID.dmg||0)+dmg; addFloat(x,y,(crit?T("КРИТ ","CRIT "):"")+fmt(dmg),crit||mult>1); shake=Math.max(shake,0.1);
     if(RAID.hp<=0){ RAID.hp=0; killStrazh(now); }
   } else if(M.info){
-    M.hp-=dmg; addFloat(x,y,(crit?"КРИТ ":"")+fmt(dmg),crit||mult>1);
+    M.hp-=dmg; addFloat(x,y,(crit?T("КРИТ ","CRIT "):"")+fmt(dmg),crit||mult>1);
     if(M.info.kind==="boss") shake=Math.max(shake,0.16);
     if(M.hp<=0){ M.hp=0; killReward(); }
   }
@@ -2290,42 +2290,42 @@ function renderList(){
     const pc=krollPlan("crit"), pch=krollPlan("chain"), pa=krollPlan("auto");
     const kN=kontraNeed(), kM=kontraMult();
     content.innerHTML=qtyBarWrap()+`
-      <div class="small" style="margin-bottom:6px">🐰 Дерево Кролёнки: четыре ветки за 💰 золото. Тело множит сам тап, Меткий глаз — крит, Контроша — серии, Автотап — урон без тапов.</div>
+      <div class="small" style="margin-bottom:6px">${T("🐰 Дерево Кролёнки: четыре ветки за 💰 золото. Тело множит сам тап, Меткий глаз — крит, Контроша — серии, Автотап — урон без тапов.","🐰 Krolyonka's tree: four branches bought with 💰 gold. Body multiplies the tap itself, Sharp Eye — crits, Kontra — tap chains, Autotap — damage without tapping.")}</div>
       <div class="card">
         <div class="info">
-          <div class="nm">🐰 ТЕЛО — Кролёнка ур.${S.tapLvl+1} <span class="small">сила тапа</span></div>
-          <div class="st">Тап-урон: ${fmt(tapDmg())} | Герои DPS: ${fmt(totalDps(M.info&&M.info.kind==="boss"))}</div>
-          <div class="st small">За уровень: тап ×1.65 · Крит: ${critChance()}% · Контроша: ${kN} тапов → ×${kM} · Автотап: ${autoTapsPS()} уд/сек</div>
+          <div class="nm">${T("🐰 ТЕЛО — Кролёнка","🐰 BODY — Krolyonka")} ${T("ур.","lvl")}${S.tapLvl+1} <span class="small">${T("сила тапа","tap power")}</span></div>
+          <div class="st">${T("Тап-урон:","Tap damage:")} ${fmt(tapDmg())} | ${T("Герои DPS:","Heroes DPS:")} ${fmt(totalDps(M.info&&M.info.kind==="boss"))}</div>
+          <div class="st small">${T("За уровень: тап ×1.65 · Крит:","Per level: tap ×1.65 · Crit:")} ${critChance()}% · ${T("Контроша:","Kontra:")} ${kN} ${T("тапов →","taps →")} ×${kM} · ${T("Автотап:","Autotap:")} ${autoTapsPS()} ${T("уд/сек","hits/sec")}</div>
         </div>
         ${buyBtn("💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""), p.n>0&&S.gold>=p.total, "buyTap")}
       </div>
       <div class="card">
         <div class="info">
-          <div class="nm">🎯 МЕТКИЙ ГЛАЗ <span class="small">${S.kroll.crit}/10 · крит</span></div>
-          <div class="st">Шанс крита тапа: ${critChance()}%${S.kroll.crit<10?" → +2% за уровень":""}</div>
-          <div class="st small">Крит бьёт ×5 («Клоунада» — ×10). Общий шанс капается на 80%.</div>
+          <div class="nm">${T("🎯 МЕТКИЙ ГЛАЗ","🎯 SHARP EYE")} <span class="small">${S.kroll.crit}/10 · ${T("крит","crit")}</span></div>
+          <div class="st">${T("Шанс крита тапа:","Tap crit chance:")} ${critChance()}%${S.kroll.crit<10?T(" → +2% за уровень"," → +2% per level"):""}</div>
+          <div class="st small">${T("Крит бьёт ×5 («Клоунада» — ×10). Общий шанс капается на 80%.","Crits hit ×5 ('Clownade' — ×10). Total chance is capped at 80%.")}</div>
         </div>
-        ${pc.done?`<div class="st small" style="color:#7fd17f">✔ МАКС</div>`:buyBtn("💰 "+fmt(pc.total)+(pc.n>1?" ×"+pc.n:""), pc.n>0&&S.gold>=pc.total, "buyKroll_crit")}
+        ${pc.done?`<div class="st small" style="color:#7fd17f">${T("✔ МАКС","✔ MAX")}</div>`:buyBtn("💰 "+fmt(pc.total)+(pc.n>1?" ×"+pc.n:""), pc.n>0&&S.gold>=pc.total, "buyKroll_crit")}
       </div>
       <div class="card">
         <div class="info">
-          <div class="nm">⚡ КОНТРОША <span class="small">${S.kroll.chain}/3 · серии</span></div>
-          <div class="st">Каждые ${kN} быстрых тапов → удар ×${kM}${S.kroll.chain<2?" → серия короче на 1":""}${S.kroll.chain===2?" → удар станет ×4":""}</div>
-          <div class="st small">Бей быстро подряд — шестой удар ломает челюсть.</div>
+          <div class="nm">${T("⚡ КОНТРОША","⚡ KONTRA")} <span class="small">${S.kroll.chain}/3 · ${T("серии","chains")}</span></div>
+          <div class="st">${T("Каждые","Every")} ${kN} ${T("быстрых тапов → удар","fast taps → a hit of")} ×${kM}${S.kroll.chain<2?T(" → серия короче на 1"," → chain shrinks by 1"):""}${S.kroll.chain===2?T(" → удар станет ×4"," → hit becomes ×4"):""}</div>
+          <div class="st small">${T("Бей быстро подряд — последний удар серии ломает челюсть.","Tap fast in a row — the finishing blow of the chain cracks jaws.")}</div>
         </div>
-        ${pch.done?`<div class="st small" style="color:#7fd17f">✔ МАКС</div>`:buyBtn("💰 "+fmt(pch.total)+(pch.n>1?" ×"+pch.n:""), pch.n>0&&S.gold>=pch.total, "buyKroll_chain")}
+        ${pch.done?`<div class="st small" style="color:#7fd17f">${T("✔ МАКС","✔ MAX")}</div>`:buyBtn("💰 "+fmt(pch.total)+(pch.n>1?" ×"+pch.n:""), pch.n>0&&S.gold>=pch.total, "buyKroll_chain")}
       </div>
       <div class="card">
         <div class="info">
-          <div class="nm">🤖 АВТОТАП <span class="small">${S.kroll.auto}/4</span></div>
-          <div class="st">Авто-ударов/сек: ${autoTapsPS()}${S.kroll.auto<4?" → +1 за уровень":""}</div>
-          <div class="st small">Кролёнка бьёт сама — урон идёт в общий DPS, даже когда не тапаешь.</div>
+          <div class="nm">${T("🤖 АВТОТАП","🤖 AUTOTAP")} <span class="small">${S.kroll.auto}/4</span></div>
+          <div class="st">${T("Авто-ударов/сек:","Auto hits/sec:")} ${autoTapsPS()}${S.kroll.auto<4?T(" → +1 за уровень"," → +1 per level"):""}</div>
+          <div class="st small">${T("Кролёнка бьёт сама — урон идёт в общий DPS, даже когда не тапаешь.","Krolyonka strikes on her own — damage flows into total DPS even when you don't tap.")}</div>
         </div>
-        ${pa.done?`<div class="st small" style="color:#7fd17f">✔ МАКС</div>`:buyBtn("💰 "+fmt(pa.total)+(pa.n>1?" ×"+pa.n:""), pa.n>0&&S.gold>=pa.total, "buyKroll_auto")}
+        ${pa.done?`<div class="st small" style="color:#7fd17f">${T("✔ МАКС","✔ MAX")}</div>`:buyBtn("💰 "+fmt(pa.total)+(pa.n>1?" ×"+pa.n:""), pa.n>0&&S.gold>=pa.total, "buyKroll_auto")}
       </div>
       <div class="card"><div class="info">
-        <div class="nm">🤝 КТО УСИЛИВАЕТ КРОЛЁНКУ</div>
-        <div class="st small">Огр 25/50 ур и Пингвин 25/50 ур — шанс крита · Шут 25 ур — тап ×1.5 на 10 сек · Мясник 25 ур — +1% за тап (до ×10) · «Клоунада» (Шут 50 + Пингвин 50) — тап ×2, крит ×2 · Талант душ 🌳 «Автотап» — +1 уд/сек (стакается с веткой до 5)</div>
+        <div class="nm">${T("🤝 КТО УСИЛИВАЕТ КРОЛЁНКУ","🤝 WHO BOOSTS KROLYONKA")}</div>
+        <div class="st small">${T("Огр 25/50 ур и Пингвин 25/50 ур — шанс крита · Шут 25 ур — тап ×1.5 на 10 сек · Мясник 25 ур — +1% за тап (до ×10) · «Клоунада» (Шут 50 + Пингвин 50) — тап ×2, крит ×2 · Талант душ 🌳 «Автотап» — +1 уд/сек (стакается с веткой до 5)","Ogre 25/50 lvl and Penguin 25/50 lvl — crit chance · Jester 25 lvl — tap ×1.5 for 10 sec · Butcher 25 lvl — +1% per tap (up to ×10) · 'Clownade' (Jester 50 + Penguin 50) — tap ×2, crit ×2 · Souls talent 🌳 'Autotap' — +1 hit/sec (stacks with the branch up to 5)")}</div>
       </div></div>`;
   }
   if(curTab==="heroes"){
