@@ -447,9 +447,9 @@ function refreshBadges(){
 /* 🌳 кумулятивный множитель за N узлов: 10-й узел даёт ровно ×20 */
 const TAL_CUM=[1,1.25,1.7,2.32,3.16,4.3,5.85,7.96,10.84,14.75,20];
 const TALENTS = {
-  tap: { nm:"🗡 Кликер",  nodes:[ {c:1,d:"Тап ×1.25"}, {c:2,d:"Тап ×1.36"}, {c:4,d:"Автотап 1/сек"}, {c:8,d:"Тап ×1.36"}, {c:16,d:"Тап ×1.36"}, {c:32,d:"Тап ×1.36"}, {c:64,d:"Тап ×1.36"}, {c:128,d:"Тап ×1.36"}, {c:256,d:"Тап ×1.36"}, {c:512,d:"Тап ×20"} ] },
-  leg: { nm:"🛡 Легион",  nodes:[ {c:1,d:"Герои ×1.25"}, {c:2,d:"Герои ×1.36"}, {c:4,d:"Цена героев −15%"}, {c:8,d:"Герои ×1.36"}, {c:16,d:"Герои ×1.36"}, {c:32,d:"Герои ×1.36"}, {c:64,d:"Герои ×1.36"}, {c:128,d:"Герои ×1.36"}, {c:256,d:"Герои ×1.36"}, {c:512,d:"Герои ×20"} ] },
-  mar: { nm:"💰 Мародёр", nodes:[ {c:1,d:"Золото ×1.25"}, {c:2,d:"Золото ×1.36"}, {c:4,d:"Боссы ×2 золото"}, {c:8,d:"Золото ×1.36"}, {c:16,d:"Золото ×1.36"}, {c:32,d:"Золото ×1.36"}, {c:64,d:"Золото ×1.36"}, {c:128,d:"Золото ×1.36"}, {c:256,d:"Золото ×1.36"}, {c:512,d:"Золото ×20"} ] },
+  tap: { nm:"🗡 Кликер", en:"🗡 Clicker",  nodes:[ {c:1,d:"Тап ×1.25",en:"Tap ×1.25"}, {c:2,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:4,d:"Автотап 1/сек",en:"Autotap 1/sec"}, {c:8,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:16,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:32,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:64,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:128,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:256,d:"Тап ×1.36",en:"Tap ×1.36"}, {c:512,d:"Тап ×20",en:"Tap ×20"} ] },
+  leg: { nm:"🛡 Легион", en:"🛡 Legion",  nodes:[ {c:1,d:"Герои ×1.25",en:"Heroes ×1.25"}, {c:2,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:4,d:"Цена героев −15%",en:"Hero price −15%"}, {c:8,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:16,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:32,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:64,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:128,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:256,d:"Герои ×1.36",en:"Heroes ×1.36"}, {c:512,d:"Герои ×20",en:"Heroes ×20"} ] },
+  mar: { nm:"💰 Мародёр", en:"💰 Marauder", nodes:[ {c:1,d:"Золото ×1.25",en:"Gold ×1.25"}, {c:2,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:4,d:"Боссы ×2 золото",en:"Bosses ×2 gold"}, {c:8,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:16,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:32,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:64,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:128,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:256,d:"Золото ×1.36",en:"Gold ×1.36"}, {c:512,d:"Золото ×20",en:"Gold ×20"} ] },
 };
 
 const DED_BOSS = [
@@ -2396,60 +2396,60 @@ function renderList(){
     const capL=S.capLvl||0, capC=Math.pow(2,capL);
     const hsL=S.hsLvl||0, hsC=3*Math.pow(2,hsL), hsNext=1+(hsL+1)*5, hsNow=1+hsL*5;
     let h=qtyBarWrap();
-    h+=`<h3 class="sec">🧾 АУДИТ ДАНЖА</h3>
+    h+=`<h3 class="sec">${T("🧾 АУДИТ ДАНЖА","🧾 DUNGEON AUDIT")}</h3>
     <div class="card"><div class="info">
-      <div class="nm">🧟 Данж №${S.par+1} · этаж ${S.floor} · рекорд забега ${S.runBest}${startF>1?(" · старт с "+startF):""}</div>
-      <div class="st">🗡 тап ×${fmtE(tapE)} · 🛡 герои ×${fmtE(legE)} · 💰 золото ×${fmtE(marE)}</div>
-      <div class="st small">Парагон: ${S.par} → герои +${S.par*2}% DPS${best?(" · 📚 бестиарий: +"+best*2+"% золота"):""}${corr.active?(" · ⚠ коррупция: моб ×"+fmtE(corr.hpMult)+", урон ×"+fmtE(corr.dpsMult)):""}</div>
-      <div class="st small">${onWall?"🧱 СТЕНА: текущий монстр живёт "+(isFinite(tGuard)?fmt(tGuard)+" сек":"вечность")+" — команда его не пробивает. Пора к Кредо.":"⚔ Текущий монстр гибнет за "+(isFinite(tGuard)?fmt(tGuard)+" сек":"—")+" — расти есть куда."}</div>
-      <div class="st small">🛡 Каждый парагон: +2% DPS героев и −0.15% к коррупции (макс −90%). 💸 Души платит только Кредо; квесты и достижения платят 💰 и 💎.</div>
+      <div class="nm">🧟 ${T("Данж","Dungeon")} №${S.par+1} · ${T("этаж","floor")} ${S.floor} · ${T("рекорд забега","run best")} ${S.runBest}${startF>1?(T(" · старт с "," · start from ")+startF):""}</div>
+      <div class="st">🗡 ${T("тап","tap")} ×${fmtE(tapE)} · 🛡 ${T("герои","heroes")} ×${fmtE(legE)} · 💰 ${T("золото","gold")} ×${fmtE(marE)}</div>
+      <div class="st small">${T("Парагон:","Paragon:")} ${S.par} → ${T("герои +","heroes +")}${S.par*2}% DPS${best?(T(" · 📚 бестиарий: +"," · 📚 bestiary: +")+best*2+"% "+T("золота","gold")):""}${corr.active?(T(" · ⚠ коррупция: моб ×"," · ⚠ corruption: mob ×")+fmtE(corr.hpMult)+", "+T("урон ×","damage ×")+fmtE(corr.dpsMult)):""}</div>
+      <div class="st small">${onWall?T("🧱 СТЕНА: текущий монстр живёт ","🧱 WALL: the current monster survives ")+(isFinite(tGuard)?fmt(tGuard)+" "+T("сек","sec"):T("вечность","forever"))+T(" — команда его не пробивает. Пора к Кредо."," — your team can't crack it. Time to see the Creed."):T("⚔ Текущий монстр гибнет за ","⚔ The current monster dies in ")+(isFinite(tGuard)?fmt(tGuard)+" "+T("сек","sec"):"—")+T(" — расти есть куда."," — there is still room to grow.")}</div>
+      <div class="st small">${T("🛡 Каждый парагон: +2% DPS героев и −0.15% к коррупции (макс −90%). 💸 Души платит только Кредо; квесты и достижения платят 💰 и 💎.","🛡 Each paragon: +2% hero DPS and −0.15% corruption (max −90%). 💸 Only the Creed pays souls; quests and achievements pay 💰 and 💎.")}</div>
     </div></div>
     <button id="prestigeBtn" ${can?"":"disabled"} data-fn="prestige">
-      ${can?`👻 ПРОДАТЬ ДАНЖ КРЕДО — ДУШ × ${fmt(gain)}${S.firstPrestige?"":" (×2 первый раз!)"}`:"👻 Престиж с "+needF+"-го этажа (ты на "+S.floor+")"}
+      ${can?`👻 ${T("ПРОДАТЬ ДАНЖ КРЕДО — ДУШ ×","SELL DUNGEON TO THE CREED — SOULS ×")} ${fmt(gain)}${S.firstPrestige?"":T(" (×2 первый раз!)"," (×2 first time!)")}`:`👻 ${T("Престиж с","Prestige from")} ${needF} ${T("этажа","floor")} (${T("ты на","you are on")} ${S.floor})`}
     </button>
-    <div class="small" style="margin:4px 0 8px">Продажа данжа: сброс этажей, героев и кулака. Монеты обнуляются — кроме стартового капитала. Души, древо, парагон и капитал остаются.</div>
+    <div class="small" style="margin:4px 0 8px">${T("Продажа данжа: сброс этажей, героев и кулака. Монеты обнуляются — кроме стартового капитала. Души, древо, парагон и капитал остаются.","Selling the dungeon: floors, heroes and the fist reset. Gold is wiped — except starting capital. Souls, the tree, paragon and capital remain.")}</div>
     <div class="card"><div class="info">
-      <div class="nm">📈 ПРОГНОЗ ДУШ</div>
-      <div class="st">Сейчас: +${fmt(gain)} 👻 · На этаже ${nextF}: уже +${fmt(nextG)} 👻</div>
-      <div class="st small">Ещё ~${Math.max(1,nextF-S.floor)} этаж(ей) до следующей души · Формула: (рекорд забега ÷ 8)^1.25${S.firstPrestige?" ×2":""}</div>
+      <div class="nm">📈 ${T("ПРОГНОЗ ДУШ","SOUL FORECAST")}</div>
+      <div class="st">${T("Сейчас:","Now:")} +${fmt(gain)} 👻 · ${T("На этаже","At floor")} ${nextF}: ${T("уже +","already +")}${fmt(nextG)} 👻</div>
+      <div class="st small">${T("Ещё ~","~")+Math.max(1,nextF-S.floor)} ${T("этаж(ей) до следующей души · Формула: (рекорд забега ÷ 8)^1.25","floors to the next soul · Formula: (run best ÷ 8)^1.25")}${S.firstPrestige?" ×2":""}</div>
     </div></div>
     <div class="card"><div class="info">
-      <div class="nm">📚 КРЕДО-АРХИВ</div>
-      <div class="st">Данжей продано: ${S.par} · Душ добыто за всё время: ${fmt(S.soulsEver||0)} · Вложено в древо: ${fmt(treeAll-treeLeft)} 👻</div>
-      <div class="st small">${S.lastPrestige?("Последний Кредо: "+new Date(S.lastPrestige).toLocaleDateString()+" "+new Date(S.lastPrestige).toLocaleTimeString().slice(0,5)):"Кредо тебя ещё не навещал"}</div>
+      <div class="nm">📚 ${T("КРЕДО-АРХИВ","CREED ARCHIVE")}</div>
+      <div class="st">${T("Данжей продано:","Dungeons sold:")} ${S.par} · ${T("Душ добыто за всё время:","Souls earned all-time:")} ${fmt(S.soulsEver||0)} · ${T("Вложено в древо:","Invested in the tree:")} ${fmt(treeAll-treeLeft)} 👻</div>
+      <div class="st small">${S.lastPrestige?(T("Последний Кредо: ","Last Creed: ")+new Date(S.lastPrestige).toLocaleDateString()+" "+new Date(S.lastPrestige).toLocaleTimeString().slice(0,5)):T("Кредо тебя ещё не навещал","The Creed hasn't visited you yet")}</div>
     </div></div>`;
-    h+=`<h3 class="sec">🛒 ВЕЧНЫЕ ПОКУПКИ</h3>`;
+    h+=`<h3 class="sec">${T("🛒 ВЕЧНЫЕ ПОКУПКИ","🛒 ETERNAL PURCHASES")}</h3>`;
     h+=`<div class="card">
       <div class="info">
-        <div class="nm">💵 СТАРТОВЫЙ КАПИТАЛ <span class="small">ур.${capL}</span></div>
-        <div class="st">После Кредо получишь: ${fmt(capL*100)} 💰${capL?(" → ур."+(capL+1)+": "+fmt((capL+1)*100)+" 💰"):""}</div>
-        <div class="st small">Вечная покупка: не сбрасывается престижем. Цена ×2 за уровень.</div>
+        <div class="nm">💵 ${T("СТАРТОВЫЙ КАПИТАЛ","STARTING CAPITAL")} <span class="small">${T("ур.","lvl")}${capL}</span></div>
+        <div class="st">${T("После Кредо получишь:","After the Creed you'll get:")} ${fmt(capL*100)} 💰${capL?(T(" → ур."," → lvl")+(capL+1)+": "+fmt((capL+1)*100)+" 💰"):""}</div>
+        <div class="st small">${T("Вечная покупка: не сбрасывается престижем. Цена ×2 за уровень.","Eternal purchase: never reset by prestige. Price ×2 per level.")}</div>
       </div>
       ${buyBtn("👻 "+fmt(capC), S.souls>=capC, "buyCap")}
     </div>
     <div class="card">
       <div class="info">
-        <div class="nm">🚀 ГОРЯЧИЙ СТАРТ <span class="small">ур.${hsL}</span></div>
-        <div class="st">После Кредо стартуешь с этажа ${hsNow}${hsL?(" → ур."+(hsL+1)+": этаж "+hsNext):""}</div>
-        <div class="st small">Экономит часы подъёма. Для Кредо всё равно нужно пройти 20 этажей от старта.</div>
+        <div class="nm">🚀 ${T("ГОРЯЧИЙ СТАРТ","HOT START")} <span class="small">${T("ур.","lvl")}${hsL}</span></div>
+        <div class="st">${T("После Кредо стартуешь с этажа","After the Creed you start at floor")} ${hsNow}${hsL?(T(" → ур."," → lvl")+(hsL+1)+": "+T("этаж","floor")+" "+hsNext):""}</div>
+        <div class="st small">${T("Экономит часы подъёма. Для Кредо всё равно нужно пройти 20 этажей от старта.","Saves hours of climbing. The Creed still requires 20 floors cleared from your start.")}</div>
       </div>
       ${buyBtn("👻 "+fmt(hsC), S.souls>=hsC, "buyHs")}
     </div>`;
-    h+=`<h3 class="sec">🌳 ДРЕВО НАСЛЕДНИКА${treeLeft>0?(" · до полного древа "+fmt(treeLeft)+" 👻"):" · ✔ ВЫУЧЕНО ПОЛНОСТЬЮ"}</h3>`;
+    h+=`<h3 class="sec">${T("🌳 ДРЕВО НАСЛЕДНИКА","🌳 HEIR'S TREE")}${treeLeft>0?(T(" · до полного древа "," · to the full tree ")+fmt(treeLeft)+" 👻"):T(" · ✔ ВЫУЧЕНО ПОЛНОСТЬЮ"," · ✔ FULLY LEARNED")}</h3>`;
     for(const key of ["tap","leg","mar"]){
       const t=TALENTS[key], n=S.tQty[key];
       const maxed=n>=t.nodes.length;
       const nd=maxed?null:t.nodes[n];
       const p=talPlan(key);
-      const effTxt={tap:"тап ×",leg:"герои ×",mar:"золото ×"}[key];
+      const effTxt=key==="tap"?T("тап ×","tap ×"):key==="leg"?T("герои ×","heroes ×"):T("золото ×","gold ×");
       const dots=t.nodes.map((x,i)=>"<span style='display:inline-block; width:9px; height:9px; margin:0 2px; border-radius:2px; background:"+(i<n?"#ffd75e":"#2a2148")+";'></span>").join("");
       h+=`<div class="card ${maxed?"owned":""}">
         <div class="info">
-          <div class="nm">${t.nm} <span class="small">${n}/${t.nodes.length}</span></div>
-          <div class="st">${effTxt}${fmtE(talMulti(key))}${nd?(" → «"+nd.d+"»"):" — ветка выучена"}</div>
+          <div class="nm">${T(t.nm,t.en)} <span class="small">${n}/${t.nodes.length}</span></div>
+          <div class="st">${effTxt}${fmtE(talMulti(key))}${nd?T(" → «"+nd.d+"»"," → '"+nd.en+"'"):T(" — ветка выучена"," — branch learned")}</div>
           <div class="st small">${dots}</div>
         </div>
-        ${maxed?"<button class=\"buy\" disabled>✔ ВСЁ</button>":buyBtn("👻 "+fmt(p.total||nd.c)+(p.k>1?" ×"+p.k:""), p.k>0, "buyTal_"+key)}
+        ${maxed?"<button class=\"buy\" disabled>"+T("✔ ВСЁ","✔ ALL")+"</button>":buyBtn("👻 "+fmt(p.total||nd.c)+(p.k>1?" ×"+p.k:""), p.k>0, "buyTal_"+key)}
       </div>`;
     }
     content.innerHTML=h;
@@ -2603,70 +2603,70 @@ function renderList(){
   if(curTab==="shop"){
     const shopCost={tap:30,dps:75,boss:150};
     let h=`<div class="card"><div class="info">
-      <div class="nm">💎 ЛАВКА КРИСТАЛЛОВ</div>
-      <div class="st">Кристаллов: ${S.don} (получаешь за престижи)</div>
+      <div class="nm">💎 ${T("ЛАВКА КРИСТАЛЛОВ","CRYSTAL SHOP")}</div>
+      <div class="st">${T("Кристаллов:","Crystals:")} ${S.don} ${T("(получаешь за престижи)","(earned from prestiges)")}</div>
     </div></div>
     <div class="card ${S.shop.tap?"owned":""}">
       <div class="info">
-        <div class="nm">✊ Тап ×2 (постоянно)</div>
-        <div class="st">Стоимость: ${shopCost.tap} 💎</div>
+        <div class="nm">✊ ${T("Тап ×2 (постоянно)","Tap ×2 (permanent)")}</div>
+        <div class="st">${T("Стоимость:","Cost:")} ${shopCost.tap} 💎</div>
       </div>
       ${S.shop.tap?"<button class=\"buy\" disabled>✔</button>":buyBtn("💎 "+shopCost.tap, S.don>=shopCost.tap, "buyShop_tap")}
     </div>
     <div class="card ${S.shop.dps?"owned":""}">
       <div class="info">
-        <div class="nm">📈 DPS героев ×1.5 (постоянно)</div>
-        <div class="st">Стоимость: ${shopCost.dps} 💎</div>
+        <div class="nm">📈 ${T("DPS героев ×1.5 (постоянно)","Hero DPS ×1.5 (permanent)")}</div>
+        <div class="st">${T("Стоимость:","Cost:")} ${shopCost.dps} 💎</div>
       </div>
       ${S.shop.dps?"<button class=\"buy\" disabled>✔</button>":buyBtn("💎 "+shopCost.dps, S.don>=shopCost.dps, "buyShop_dps")}
     </div>
     <div class="card ${S.shop.boss?"owned":""}">
       <div class="info">
-        <div class="nm">👹 Урон по боссу ×2 (постоянно)</div>
-        <div class="st">Стоимость: ${shopCost.boss} 💎</div>
+        <div class="nm">👹 ${T("Урон по боссу ×2 (постоянно)","Boss damage ×2 (permanent)")}</div>
+        <div class="st">${T("Стоимость:","Cost:")} ${shopCost.boss} 💎</div>
       </div>
       ${S.shop.boss?"<button class=\"buy\" disabled>✔</button>":buyBtn("💎 "+shopCost.boss, S.don>=shopCost.boss, "buyShop_boss")}
     </div>
     <div class="card">
       <div class="info">
-        <div class="nm">🔥 ФАКЕЛЬЩИК <span class="small">ур.${S.trLvl||0}/2</span></div>
-        <div class="st">Запас факелов: ${"🔥".repeat(3+(S.trLvl||0))} (${3+(S.trLvl||0)} из 5)${(S.trLvl||0)<2?(" → ур."+(S.trLvl+1)+": "+(3+(S.trLvl||0)+1)+" 🔥"):" — ✔ МАКС"}</div>
-        <div class="st small">Больше рейдов на стражей и штурмов клана между заправками. Переживает престиж.</div>
+        <div class="nm">🔥 ${T("ФАКЕЛЬЩИК","TORCHBEARER")} <span class="small">${T("ур.","lvl")}${S.trLvl||0}/2</span></div>
+        <div class="st">${T("Запас факелов:","Torch stock:")} ${"🔥".repeat(3+(S.trLvl||0))} (${3+(S.trLvl||0)} ${T("из 5","of 5")})${(S.trLvl||0)<2?(T(" → ур."," → lvl")+(S.trLvl+1)+": "+(3+(S.trLvl||0)+1)+" 🔥"):T(" — ✔ МАКС"," — ✔ MAX")}</div>
+        <div class="st small">${T("Больше рейдов на стражей и штурмов клана между заправками. Переживает престиж.","More guardian raids and clan assaults between refuels. Survives prestige.")}</div>
       </div>
-      ${(S.trLvl||0)>=2?"<button class=\"buy\" disabled>✔ МАКС — 5 🔥</button>":buyBtn("🩸 "+[10,20][S.trLvl||0], S.blood>=[10,20][S.trLvl||0], "buyTr")}
+      ${(S.trLvl||0)>=2?"<button class=\"buy\" disabled>"+T("✔ МАКС — 5 🔥","✔ MAX — 5 🔥")+"</button>":buyBtn("🩸 "+[10,20][S.trLvl||0], S.blood>=[10,20][S.trLvl||0], "buyTr")}
     </div>
     <div class="card">
       <div class="info">
-        <div class="nm">⏰ НОЧНАЯ СМЕНА <span class="small">ур.${S.offLvl||0}/4</span></div>
-        <div class="st">Оффлайн-бой: до ${(8+(S.offLvl||0)*2)} ч (база 8 ч)${(S.offLvl||0)<4?(" → ур."+(S.offLvl+1)+": "+(8+(S.offLvl+1)*2)+" ч"):" — ✔ МАКС"}</div>
-        <div class="st small">Пока спишь, Дед дробит башню дольше — золото и этажи капают всю смену. Переживает престиж.</div>
+        <div class="nm">⏰ ${T("НОЧНАЯ СМЕНА","NIGHT SHIFT")} <span class="small">${T("ур.","lvl")}${S.offLvl||0}/4</span></div>
+        <div class="st">${T("Оффлайн-бой: до","Offline combat: up to")} ${(8+(S.offLvl||0)*2)} ${T("ч (база 8 ч)","h (base 8 h)")}${(S.offLvl||0)<4?(T(" → ур."," → lvl")+(S.offLvl+1)+": "+(8+(S.offLvl+1)*2)+" "+T("ч","h")):T(" — ✔ МАКС"," — ✔ MAX")}</div>
+        <div class="st small">${T("Пока спишь, Дед дробит башню дольше — золото и этажи капают всю смену. Переживает престиж.","While you sleep, Gramps chews the tower longer — gold and floors drip all shift. Survives prestige.")}</div>
       </div>
-      ${(S.offLvl||0)>=4?"<button class=\"buy\" disabled>✔ МАКС — 16 ч</button>":buyBtn("🩸 "+[10,15,20,25][S.offLvl||0], S.blood>=[10,15,20,25][S.offLvl||0], "buyOff")}
+      ${(S.offLvl||0)>=4?"<button class=\"buy\" disabled>"+T("✔ МАКС — 16 ч","✔ MAX — 16 h")+"</button>":buyBtn("🩸 "+[10,15,20,25][S.offLvl||0], S.blood>=[10,15,20,25][S.offLvl||0], "buyOff")}
     </div>
-    <h3 class="sec">🩸 КРОВАВЫЕ КРИСТАЛЛЫ</h3>
-    <div class="small" style="margin:0 0 6px">Премиум-валюта. Покупается только за реальные деньги, никогда не добывается в игре. Тратится на редкие удобства (Факельщик, Ночная смена…). Баланс: <span class="blood">${S.blood} 🩸</span></div>
+    <h3 class="sec">🩸 ${T("КРОВАВЫЕ КРИСТАЛЛЫ","BLOOD CRYSTALS")}</h3>
+    <div class="small" style="margin:0 0 6px">${T("Премиум-валюта. Покупается только за реальные деньги, никогда не добывается в игре. Тратится на редкие удобства (Факельщик, Ночная смена…). Баланс: ","Premium currency. Bought only with real money, never earned in-game. Spent on rare comforts (Torchbearer, Night Shift…). Balance: ")}<span class="blood">${S.blood} 🩸</span></div>
     <div class="card">
       <div class="info">
-        <div class="nm">🩸 МЕШОЧЕК</div>
+        <div class="nm">${T("🩸 МЕШОЧЕК","🩸 POUCH")}</div>
         <div class="st">+10 🩸</div>
       </div>
       <button class="buy" data-fn="buyBlood_1">99 ₽</button>
     </div>
     <div class="card">
       <div class="info">
-        <div class="nm">🩸 КУВШИН <span class="small">выгоднее</span></div>
+        <div class="nm">${T("🩸 КУВШИН","🩸 JUG")} <span class="small">${T("выгоднее","better value")}</span></div>
         <div class="st">+60 🩸</div>
       </div>
       <button class="buy" data-fn="buyBlood_2">499 ₽</button>
     </div>
     <div class="card">
       <div class="info">
-        <div class="nm">🩸 СУНДУК <span class="small">максимум</span></div>
+        <div class="nm">${T("🩸 СУНДУК","🩸 CHEST")} <span class="small">${T("максимум","biggest")}</span></div>
         <div class="st">+300 🩸</div>
       </div>
       <button class="buy" data-fn="buyBlood_3">1990 ₽</button>
     </div>
-    <div class="small" style="margin-top:6px">Покупки за 💎 и 🩸 действуют навсегда, даже после престижа. Кристаллы накапливаются при продаже данжа Кредо, кровавые кристаллы — только за реальные деньги (секция выше).</div>`;
+    <div class="small" style="margin-top:6px">${T("Покупки за 💎 и 🩸 действуют навсегда, даже после престижа. Кристаллы накапливаются при продаже данжа Кредо, кровавые кристаллы — только за реальные деньги (секция выше).","💎 and 🩸 purchases last forever, even after prestige. Crystals pile up when selling the dungeon to the Creed; blood crystals come only from real money (section above).")}</div>`;
     content.innerHTML=h;
   }
   if(curTab==="bestiary"){
