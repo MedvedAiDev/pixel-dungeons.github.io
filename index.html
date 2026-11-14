@@ -2064,17 +2064,20 @@ function draw(now){
   /* ---- Отряд героев (только в данже, не поверх рейда) ---- */
   if(!(RAID.active||RAID.over)){
   const HY=fy+14;
+  const ARC_R=205, ARC_S=70;                              // полусфера-подкова: края у стены, середина ближе к зрителю
+  const arcDrop=dxa=>Math.round(ARC_S-(ARC_R-Math.sqrt(ARC_R*ARC_R-dxa*dxa))); // 0 у краёв, ~70 в центре
   ctx.textAlign="center";
   SQUAD.forEach((h,k)=>{
     if(!S.heroLvl[h.i]) return;
     const map=SPRITES[h.map], rows=map.length, halfH=rows*h.s/2;
+    const dxa=h.x*CW-CW/2, footY=HY-8+arcDrop(Math.abs(dxa)); // дуга вниз, как на скриншоте
     const attack=((now+k*170)%1000)<150;
     const bob=attack?Math.sin(now/40)*2:Math.sin(now/300+k*1.3)*2;   // то дышит, то прыгает в атаке
     const dx=attack?(h.x*CW<CW/2?5:-5):0;                           // выпад в сторону противника
-    const cx=h.x*CW+dx, cy=HY-bob-halfH;
+    const cx=h.x*CW+dx, cy=footY-bob-halfH;
     // тень
     ctx.fillStyle="rgba(0,0,0,0.30)";
-    ctx.beginPath(); ctx.ellipse(h.x*CW+dx*0.4,HY+2,12,3.5,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(h.x*CW+dx*0.4,footY+2,12,3.5,0,0,Math.PI*2); ctx.fill();
     drawSpr(map,cx,cy,h.s,h.ov);
     // вспышка удара между героем и противником
     if(attack&&M.info){
@@ -2083,12 +2086,12 @@ function draw(now){
     }
     // метка уровня
     ctx.fillStyle="rgba(232,224,208,0.55)"; ctx.font="8px monospace";
-    ctx.fillText("ур."+S.heroLvl[h.i], h.x*CW, HY+13);
+    ctx.fillText("ур."+S.heroLvl[h.i], h.x*CW, footY+13);
     // вспышка при повышении уровня
     const ft=now-heroFlash[h.i];
     if(ft<280){ ctx.globalAlpha=(1-ft/280)*0.85; drawSpr(map,cx,cy,h.s,"FLASH"); ctx.globalAlpha=1; }
   });
-  /* Кролёнка — главный герой в центре линии, бьёт с каждым тапом */
+  /* Кролёнка — главный герой в центре подковы, бьёт с каждым тапом */
   const kmap=SPRITES.krolyonka, kHalf=kmap.length*2.6/2;
   const kAtk=(now-lastTap)<180;
   const kB=kAtk?Math.sin(now/40)*2:Math.sin(now/280)*2;
