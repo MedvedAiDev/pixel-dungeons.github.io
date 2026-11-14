@@ -2096,13 +2096,14 @@ function draw(now){
   const kAtk=(now-lastTap)<180;
   const kB=kAtk?Math.sin(now/40)*2:Math.sin(now/280)*2;
   const kDy=kAtk?-6:0;                                    // выпад вверх, к монстру
-  const kx=CW*0.5, ky=HY-kB-kHalf+kDy;
+  const kx=CW*0.5, kFoot=HY-8+ARC_S;                      // стоит на дуге, в самой нижней точке подковы
+  const ky=kFoot-kB-kHalf+kDy;
   ctx.fillStyle="rgba(0,0,0,0.30)";
-  ctx.beginPath(); ctx.ellipse(kx,HY+2,13,3.5,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(kx,kFoot+2,13,3.5,0,0,Math.PI*2); ctx.fill();
   drawSpr(kmap,kx,ky,2.6);
   if(kAtk&&M.info){ ctx.fillStyle="rgba(255,255,255,0.65)"; ctx.fillRect(kx-4,ky-8,8,2); }
   ctx.fillStyle="#ffd75e"; ctx.font="8px monospace";
-  ctx.fillText("ур."+(S.tapLvl+1), kx, HY+13);
+  ctx.fillText("ур."+(S.tapLvl+1), kx, kFoot+13);
   }
 
   for(let i=parts.length-1;i>=0;i--){
