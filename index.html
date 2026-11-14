@@ -1403,15 +1403,15 @@ function donateGlory(){ // 🙏 пожертвовать 300 💠 личной �
 }
 /* 🎁 прокачиваемые баффы: у призраков всегда 2-й уровень, у своего клана — с 1-го (минимальный) и до 5-го */
 const BUFF_B={
-  raid: {nm:"⚔ Рейд-ДПС",    v:[0,.10,.15,.20,.25,.30]},
-  gold: {nm:"💰 Золото",      v:[0,.03,.05,.07,.09,.11]},
-  torch:{nm:"🔥 Факелы",      v:[0,.25,.35,.45,.55,.65]},
-  boss: {nm:"👹 Босс клана",  v:[0,.20,.30,.40,.50,.60]},
-  glory:{nm:"💠 Слава",       v:[0,.15,.25,.35,.45,.55]},
-  hero: {nm:"🛡 ДПС героев",  v:[0,.03,.05,.07,.09,.11]},
+  raid: {nm:"⚔ Рейд-ДПС",    en:"⚔ Raid DPS",   v:[0,.10,.15,.20,.25,.30]},
+  gold: {nm:"💰 Золото",      en:"💰 Gold",      v:[0,.03,.05,.07,.09,.11]},
+  torch:{nm:"🔥 Факелы",      en:"🔥 Torches",   v:[0,.25,.35,.45,.55,.65]},
+  boss: {nm:"👹 Босс клана",  en:"👹 Clan boss", v:[0,.20,.30,.40,.50,.60]},
+  glory:{nm:"💠 Слава",       en:"💠 Glory",     v:[0,.15,.25,.35,.45,.55]},
+  hero: {nm:"🛡 ДПС героев",  en:"🛡 Hero DPS",  v:[0,.03,.05,.07,.09,.11]},
 };
 const BUFF_BASE=["raid","gold","torch","boss","glory","hero"]; // порядок при выборе
-function buffTxt(b,lvl){ const m=BUFF_B[b]; return m.nm+" +"+Math.round(m.v[lvl]*100)+"%"; }
+function buffTxt(b,lvl){ const m=BUFF_B[b]; return T(m.nm,m.en)+" +"+Math.round(m.v[lvl]*100)+"%"; }
 function clanBuffLvl(chk){
   if(!S.clan||S.clan.id<0) return 0;
   if(CLANS[S.clan.id]&&CLANS[S.clan.id].custom) return (S.customClan.buffs||[]).reduce((a,x)=>x.b===chk?x.lvl:a,0);
@@ -2463,36 +2463,36 @@ function renderList(){
         +"border:1px solid "+(act?"#7a5c14":"#352a5e")+"; border-radius:8px;'>"+label+"</button>";
     }
     let h="<div style='display:flex; gap:6px; margin-bottom:8px;'>"
-      +wtabBtn("clan","🏰 КЛАН",warTab==="clan")
-      +wtabBtn("raid","⚔ РЕЙДЫ",warTab==="raid")
+      +wtabBtn("clan","🏰 "+T("КЛАН","CLAN"),warTab==="clan")
+      +wtabBtn("raid","⚔ "+T("РЕЙДЫ","RAIDS"),warTab==="raid")
       +"</div>";
     if(warTab==="clan"){
       const c=S.clan;
       if(c.id<0){
         h+=`
         <div class="card"><div class="info">
-          <div class="nm">🏰 БАШНЯ ТЫСЯЧИ ЭТАЖЕЙ</div>
-          <div class="st">Еженедельный зачёт кланов: общий босс, лига, награды. Выбери клан — бай чай в чате.</div>
+          <div class="nm">🏰 ${T("БАШНЯ ТЫСЯЧИ ЭТАЖЕЙ","TOWER OF A THOUSAND FLOORS")}</div>
+          <div class="st">${T("Еженедельный зачёт кланов: общий босс, лига, награды. Выбери клан — бай чай в чате.","Weekly clan standings: shared boss, league, rewards. Pick a clan — buy tea in the chat.")}</div>
         </div></div>
         <div style="display:flex; margin:6px 0;">
-          <button class="buy" style="flex:1 1 auto; padding:12px 8px; font-size:16px;" data-fn="openJoin">🏰 ВСТУПИТЬ В КЛАН</button>
+          <button class="buy" style="flex:1 1 auto; padding:12px 8px; font-size:16px;" data-fn="openJoin">🏰 ${T("ВСТУПИТЬ В КЛАН","JOIN A CLAN")}</button>
         </div>
-        <div class="small" style="margin:2px 0 8px; text-align:center;">Бафф, еженедельный босс, сундуки и лига «Башня Тысячи Этажей»</div>
-        ${(S.clanCd&&Date.now()<S.clanCd)?`<div class="small" style="margin:0 0 8px; text-align:center; color:#ff7a6a">⛔ Штраф за выход из клана: вступление через ${fmtCd()}</div>`:""}
+        <div class="small" style="margin:2px 0 8px; text-align:center;">${T("Бафф, еженедельный босс, сундуки и лига «Башня Тысячи Этажей»","Buff, weekly boss, chests and the 'Tower of a Thousand Floors' league")}</div>
+        ${(S.clanCd&&Date.now()<S.clanCd)?`<div class="small" style="margin:0 0 8px; text-align:center; color:#ff7a6a">⛔ ${T("Штраф за выход из клана: вступление через","Leave penalty: you can join in")} ${fmtCd()}</div>`:""}
         <div class="card">
           <div class="info">
-            <div class="nm">🏰 СВОЙ КЛАН <span class="small">донат</span></div>
+            <div class="nm">🏰 ${T("СВОЙ КЛАН","YOUR OWN CLAN")} <span class="small">${T("донат","donate")}</span></div>
             ${clanCreateName?`
-            <div class="nm">🎁 ВЫБОР СТАРТОВОГО БАФФА · клан «${clanCreateName}»</div>
-            <div class="st">Один бафф — бесплатно, минимальный уровень (прокачаешь за 🩸 потом)</div>
-            ${BUFF_BASE.map((b,i)=>`<div class="card"><div class="info"><div class="st">${buffTxt(b,1)}</div></div><button class="buy" data-fn="clanBuffPick_${i}">ВЫБРАТЬ</button></div>`).join("")}
-            <button class="buy" data-fn="clanBuffCancel">✖ ОТМЕНА</button>`:`
-            <div class="st">${CLANS.some(c=>c.custom)?("Твой клан «"+CLANS.find(c=>c.custom).n+"» ждёт командира"):"Основай собственный клан за 50 🩸"}</div>
-            <div class="st small">Назовёшь его как хочешь, выберешь один бесплатный бафф; остальные 5 баффов и прокачку докупишь за 🩸. Возврат в свой клан — бесплатно.</div>`}
+            <div class="nm">🎁 ${T("ВЫБОР СТАРТОВОГО БАФФА · клан «","CHOOSING THE STARTING BUFF · clan '")}${clanCreateName}»</div>
+            <div class="st">${T("Один бафф — бесплатно, минимальный уровень (прокачаешь за 🩸 потом)","One buff for free, minimum level (upgrade with 🩸 later)")}</div>
+            ${BUFF_BASE.map((b,i)=>`<div class="card"><div class="info"><div class="st">${buffTxt(b,1)}</div></div><button class="buy" data-fn="clanBuffPick_${i}">${T("ВЫБРАТЬ","PICK")}</button></div>`).join("")}
+            <button class="buy" data-fn="clanBuffCancel">✖ ${T("ОТМЕНА","CANCEL")}</button>`:`
+            <div class="st">${CLANS.some(c=>c.custom)?(T("Твой клан «","Your clan '")+CLANS.find(c=>c.custom).n+"» "+T("ждёт командира","awaits its commander")):T("Основай собственный клан за 50 🩸","Found your own clan for 50 🩸")}</div>
+            <div class="st small">${T("Назовёшь его как хочешь, выберешь один бесплатный бафф; остальные 5 баффов и прокачку докупишь за 🩸. Возврат в свой клан — бесплатно.","Name it whatever you like, pick one free buff; buy the other 5 buffs and upgrades with 🩸. Returning to your own clan is free.")}</div>`}
           </div>
-          ${clanCreateName?"":(function(){const ci=CLANS.findIndex(c=>c.custom); const cd=S.clanCd&&Date.now()<S.clanCd; return ci>=0?'<button class="buy" '+(cd?"disabled ":"")+'data-fn="joinClan_'+ci+'">'+(cd?"ВЕРНУТЬСЯ (⏳ "+fmtCd()+")":"ВЕРНУТЬСЯ")+'</button>':buyBtn("🏰 СОЗДАТЬ — 50 🩸", S.blood>=50, "createClan");})()}
+          ${clanCreateName?"":(function(){const ci=CLANS.findIndex(c=>c.custom); const cd=S.clanCd&&Date.now()<S.clanCd; return ci>=0?'<button class="buy" '+(cd?"disabled ":"")+'data-fn="joinClan_'+ci+'">'+(cd?T("ВЕРНУТЬСЯ (⏳ ","RETURN (⌛ ")+fmtCd()+")":T("ВЕРНУТЬСЯ","RETURN"))+'</button>':buyBtn("🏰 "+T("СОЗДАТЬ — 50 🩸","CREATE — 50 🩸"), S.blood>=50, "createClan");})()}
         </div>
-        <div class="small" style="margin-top:6px">Онлайн-кланы с друзьями придут вместе с сервером. Сейчас — кланы-призраки (живут по расписанию башни).</div>`;
+        <div class="small" style="margin-top:6px">${T("Онлайн-кланы с друзьями придут вместе с сервером. Сейчас — кланы-призраки (живут по расписанию башни).","Online clans with friends arrive with the server. For now — ghost clans (living on the tower's schedule).")}</div>`;
       } else {
         const cl=CLANS[c.id];
         const cwait=Math.max(0,450000-(Date.now()-S.lastTorchT));
@@ -2503,71 +2503,71 @@ function renderList(){
           <div class="nm">🏰 ${cl.n}</div>
           <div class="st">${cl.motto}</div>
           ${cl.custom&&cl.desc?`<div class="st">✏ ${cl.desc}</div>`:""}
-          ${cl.custom?"":`<div class="st">Бафф клана: 🎁 ${cl.bTxt} <span class="small">(у призраков не прокачивается)</span></div>`}
-          <div class="st">Личный вклад за неделю: ${fmt(c.contrib)} очк.</div>
+          ${cl.custom?"":`<div class="st">${T("Бафф клана: 🎁","Clan buff: 🎁")} ${cl.bTxt} <span class="small">${T("(у призраков не прокачивается)","(ghosts can't upgrade it)")}</span></div>`}
+          <div class="st">${T("Личный вклад за неделю:","Your weekly contribution:")} ${fmt(c.contrib)} ${T("очк.","pts")}</div>
         </div>
-        ${cl.custom?`<button class="buy" data-fn="clanDescEdit">✏ ОПИСАНИЕ</button>`:""}
+        ${cl.custom?`<button class="buy" data-fn="clanDescEdit">✏ ${T("ОПИСАНИЕ","DESCRIPTION")}</button>`:""}
         </div>
         <div class="card"><div class="info">
-          <div class="nm">🙏 КОТЁЛ КЛАНА <span class="small">общая копилка Славы</span></div>
-          <div class="st">В котле: 💠 ${fmt(clanPot())}${clanLvl()<10?(" · до ур."+(clanLvl()+1)+": "+fmt(clanLvlCost())+" 💠"):" · клан максимального уровня"}</div>
+          <div class="nm">🙏 ${T("КОТЁЛ КЛАНА","CLAN CAULDRON")} <span class="small">${T("общая копилка Славы","shared glory pool")}</span></div>
+          <div class="st">${T("В котле:","In the cauldron:")} 💠 ${fmt(clanPot())}${clanLvl()<10?(T(" · до ур."," · to lvl")+(clanLvl()+1)+": "+fmt(clanLvlCost())+" 💠"):T(" · клан максимального уровня"," · clan at max level")}</div>
           ${clanLvl()<10?`<div style="height:8px;background:#2a1e3e;border:1px solid #0e0a1a;border-radius:4px;margin:4px 0;overflow:hidden"><div style="height:100%;background:#7fd17f;width:${Math.min(100,clanPot()/clanLvlCost()*100).toFixed(1)}%"></div></div>`:""}
-          <div class="st small">Копят все: твоё пожертвование (300 💠/день), штурмы босса (+30), трофеи (+150), 10% Славы рейдов и взносы бойцов. Личная Слава остаётся у тебя.</div>
-          ${cl.custom?"":`<div class="st small" style="color:#ff9d7a">⚠ У клана-призрака котёл и уровни сгорят при выходе.</div>`}
+          <div class="st small">${T("Копят все: твоё пожертвование (300 💠/день), штурмы босса (+30), трофеи (+150), 10% Славы рейдов и взносы бойцов. Личная Слава остаётся у тебя.","Everyone fills it: your daily donation (300 💠/day), boss assaults (+30), trophies (+150), 10% of raid glory and fighters' dues. Personal glory stays yours.")}</div>
+          ${cl.custom?"":`<div class="st small" style="color:#ff9d7a">${T("⚠ У клана-призрака котёл и уровни сгорят при выходе.","⚠ In a ghost clan the cauldron and levels burn when you leave.")}</div>`}
         </div>
-        ${clanLvl()<10?`<button class="buy" ${(S.donDay===dayIdx_w()||S.glory<300)?"disabled ":""} data-fn="donateGlory">${S.donDay===dayIdx_w()?"🙏 СЕГОДНЯ УЖЕ ПОЖЕРТВОВАНО":"🙏 ПОЖЕРТВОВАТЬ 300 💠"}</button>`:""}
+        ${clanLvl()<10?`<button class="buy" ${(S.donDay===dayIdx_w()||S.glory<300)?"disabled ":""} data-fn="donateGlory">${S.donDay===dayIdx_w()?T("🙏 СЕГОДНЯ УЖЕ ПОЖЕРТВОВАНО","🙏 ALREADY DONATED TODAY"):T("🙏 ПОЖЕРТВОВАТЬ 300 💠","🙏 DONATE 300 💠")}</button>`:""}
         </div>
         <div class="card"><div class="info">
-          <div class="nm">🏰 УРОВЕНЬ КЛАНА ${clanLvl()}/10</div>
-          <div class="st">За уровень: +5% урона по боссу клана · +3% Славы с рейда · 👥 +10 слотов</div>
-          <div class="st">Сейчас: +${((clanLvl()-1)*5)}% урона · +${((clanLvl()-1)*3)}% Славы · 👥 ${clanSlots()} слотов</div>
-          ${clanLvl()<10?`<div class="st">Следующий уровень: 💠 ${fmt(clanLvlCost())} Славы из котла · 👥 ${clanSlots(clanLvl()+1)} слотов</div>`:""}
+          <div class="nm">🏰 ${T("УРОВЕНЬ КЛАНА","CLAN LEVEL")} ${clanLvl()}/10</div>
+          <div class="st">${T("За уровень: +5% урона по боссу клана · +3% Славы с рейда · 👥 +10 слотов","Per level: +5% clan boss damage · +3% raid glory · 👥 +10 slots")}</div>
+          <div class="st">${T("Сейчас:","Now:")} +${((clanLvl()-1)*5)}% ${T("урона","damage")} · +${((clanLvl()-1)*3)}% ${T("Славы","glory")} · 👥 ${clanSlots()} ${T("слотов","slots")}</div>
+          ${clanLvl()<10?`<div class="st">${T("Следующий уровень: 💠","Next level: 💠")} ${fmt(clanLvlCost())} ${T("Славы из котла · 👥","glory from the cauldron · 👥")} ${clanSlots(clanLvl()+1)} ${T("слотов","slots")}</div>`:""}
         </div>
-        ${clanLvl()<10?`<button class="buy" ${clanPot()>=clanLvlCost()?"":"disabled "} data-fn="clanLvlUp">🏰 ПРОКАЧАТЬ — ${fmt(clanLvlCost())} 💠 ИЗ КОТЛА</button>`:`<div class="st small" style="color:#7fd17f">✔ МАКС. УРОВЕНЬ</div>`}
+        ${clanLvl()<10?`<button class="buy" ${clanPot()>=clanLvlCost()?"":"disabled "} data-fn="clanLvlUp">🏰 ${T("ПРОКАЧАТЬ —","UPGRADE —")} ${fmt(clanLvlCost())} 💠 ${T("ИЗ КОТЛА","FROM THE CAULDRON")}</button>`:`<div class="st small" style="color:#7fd17f">${T("✔ МАКС. УРОВЕНЬ","✔ MAX LEVEL")}</div>`}
         </div>
         ${cl.custom?`
         <div class="card"><div class="info">
-          <div class="nm">🎁 БАФФЫ КЛАНА <span class="small">${(cl.buffs||[]).length}/6</span></div>
+          <div class="nm">🎁 ${T("БАФФЫ КЛАНА","CLAN BUFFS")} <span class="small">${(cl.buffs||[]).length}/6</span></div>
           ${(cl.buffs||[]).length?cl.buffs.map((bf,bi)=>`
-          <div class="st">◆ ${buffTxt(bf.b,bf.lvl)} <span class="small">ур.${bf.lvl}/5</span>${bf.lvl<5?('<button class="buy" '+(S.blood>=[10,20,30,40][bf.lvl-1]?"":"disabled ")+' data-fn="clanBuffUp_'+BUFF_BASE.indexOf(bf.b)+'">🩸 '+[10,20,30,40][bf.lvl-1]+'</button>'):" <span style='color:#7fd17f'>✔ МАКС</span>"}</div>`).join(""):"<div class='st small'>Баффов пока нет</div>"}
+          <div class="st">◆ ${buffTxt(bf.b,bf.lvl)} <span class="small">${T("ур.","lvl")}${bf.lvl}/5</span>${bf.lvl<5?('<button class="buy" '+(S.blood>=[10,20,30,40][bf.lvl-1]?"":"disabled ")+' data-fn="clanBuffUp_'+BUFF_BASE.indexOf(bf.b)+'">🩸 '+[10,20,30,40][bf.lvl-1]+'</button>'):" <span style='color:#7fd17f'>"+T("✔ МАКС","✔ MAX")+"</span>"}</div>`).join(""):`<div class='st small'>${T("Баффов пока нет","No buffs yet")}</div>`}
         </div>
         ${clanBuffAdd?`
-        <div class="st small" style="margin-top:6px">Новый бафф: 50 🩸, стартует с минимального уровня</div>
-        ${BUFF_BASE.filter(b=>!(cl.buffs||[]).some(x=>x.b===b)).map(b=>{const i=BUFF_BASE.indexOf(b); return `<div class="card"><div class="info"><div class="st">${buffTxt(b,1)}</div></div><button class="buy" ${S.blood>=50?"":"disabled "} data-fn="clanBuffBuy_${i}">🩸 50</button></div>`}).join("")||"<div class='st small'>Все 6 баффов уже в клане!</div>"}
-        <button class="buy" data-fn="clanBuffAddCancel">✖ ОТМЕНА</button>
-        `:((cl.buffs||[]).length<6?'<button class="buy" '+(S.blood>=50?"":"disabled ")+' data-fn="clanBuffAdd">➕ ДОБАВИТЬ БАФФ — 50 🩸</button>':"")}
+        <div class="st small" style="margin-top:6px">${T("Новый бафф: 50 🩸, стартует с минимального уровня","New buff: 50 🩸, starts at minimum level")}</div>
+        ${BUFF_BASE.filter(b=>!(cl.buffs||[]).some(x=>x.b===b)).map(b=>{const i=BUFF_BASE.indexOf(b); return `<div class="card"><div class="info"><div class="st">${buffTxt(b,1)}</div></div><button class="buy" ${S.blood>=50?"":"disabled "} data-fn="clanBuffBuy_${i}">🩸 50</button></div>`}).join("")||`<div class='st small'>${T("Все 6 баффов уже в клане!","All 6 buffs are already in the clan!")}</div>`}
+        <button class="buy" data-fn="clanBuffAddCancel">✖ ${T("ОТМЕНА","CANCEL")}</button>
+        `:((cl.buffs||[]).length<6?'<button class="buy" '+(S.blood>=50?"":"disabled ")+' data-fn="clanBuffAdd">➕ '+T("ДОБАВИТЬ БАФФ — 50 🩸","ADD A BUFF — 50 🩸")+'</button>':"")}
         </div>`:""}
         <div class="card"><div class="info">
-          <div class="nm">👹 БОСС КЛАНА · неделя ${c.wk+1}</div>
+          <div class="nm">👹 ${T("БОСС КЛАНА · неделя","CLAN BOSS · week")} ${c.wk+1}</div>
           <div class="st">HP: ${fmt(Math.ceil(c.bossHp))} / ${fmt(c.bossMax)} (${Math.round(bossFrac*100)}%)</div>
           <div style="height:8px;background:#3a2018;border:1px solid #0e0a1a;border-radius:4px;margin:4px 0;overflow:hidden"><div style="height:100%;background:#d84a3a;width:${(bossFrac*100).toFixed(1)}%"></div></div>
-          <div class="st">«Бойцы-призраки» грызут его сами — дорубай штурмами!</div>
-          <div class="st">${S.clan.war?"⚔ ВОЙНА: соперник атакует твою башню…":"Башня под охраной (сейчас нет врагов)"}</div>
+          <div class="st">${T("«Бойцы-призраки» грызут его сами — дорубай штурмами!","Ghost fighters chew on it by themselves — finish it with assaults!")}</div>
+          <div class="st">${S.clan.war?T("⚔ ВОЙНА: соперник атакует твою башню…","⚔ WAR: the rival is attacking your tower…"):T("Башня под охраной (сейчас нет врагов)","Tower is guarded (no enemies right now)")}</div>
         </div>
-        <button class="buy" ${(c.chest)?"":'disabled'} data-fn="claimChest">🎁 ЗАБРАТЬ ТРОФЕЙ КЛАНА</button>
+        <button class="buy" ${(c.chest)?"":'disabled'} data-fn="claimChest">🎁 ${T("ЗАБРАТЬ ТРОФЕЙ КЛАНА","CLAIM THE CLAN TROPHY")}</button>
         </div>
         <button id="prestigeBtn" ${(S.torches>0&&S.floor>=3&&c.hitsToday<3&&!RAID.active&&c.bossHp>0)?"":"disabled"} data-fn="clanHit">
-          ${(c.hitsToday>=3)?"⚔ ШТУРМЫ НА СЕГОДНЯ ИСЧЕРПАНЫ (3/3)":(c.bossHp<=0?"👹 БОСС УЖЕ ДОБИТ — ЖДИ НОВОЙ НЕДЕЛИ":(S.torches>0?"⚔ ШТУРМ БОССА (−1 🔥) · "+c.hitsToday+"/3 в день":(S.floor<3?"с 3-го этажа":"🔥 Факелы кончились (+1 через "+cmm+":"+css+")")))}
+          ${(c.hitsToday>=3)?T("⚔ ШТУРМЫ НА СЕГОДНЯ ИСЧЕРПАНЫ (3/3)","⚔ ASSAULTS EXHAUSTED FOR TODAY (3/3)"):(c.bossHp<=0?T("👹 БОСС УЖЕ ДОБИТ — ЖДИ НОВОЙ НЕДЕЛИ","👹 BOSS ALREADY DOWN — WAIT FOR THE NEW WEEK"):(S.torches>0?T("⚔ ШТУРМ БОССА (−1 🔥) · ","⚔ BOSS ASSAULT (−1 🔥) · ")+c.hitsToday+"/3 "+T("в день","per day"):(S.floor<3?T("с 3-го этажа","from floor 3"):T("🔥 Факелы кончились (+1 через ","🔥 Out of torches (+1 in ")+cmm+":"+css+")")))}
         </button>
-        <div class="small" style="margin-top:6px">Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты). Полная таблица лиги — в 📊 РЕЙТИНГАХ.</div>
-        <button class="buy" style="display:block; width:100%; margin-top:10px; background:#7a1f1a; border-color:#a03a30; color:#ffd0c8;" ${(RAID.active&&RAID.kind==="clan")?"disabled":""} data-fn="clanLeave">🚪 ВЫЙТИ ИЗ КЛАНА</button>
-        <div class="small" style="margin-top:4px; color:#ff7a6a">Выход сжигает прогресс недели и накладывает штраф: 24 ч без вступлений.</div>`;
+        <div class="small" style="margin-top:6px">${T("Очки недели: кульминации этажей, рейды-победы и урон по боссу. Убил босса клана — сундук получает весь клан (и ты). Полная таблица лиги — в 📊 РЕЙТИНГАХ.","Week points: floor climaxes, raid wins and boss damage. Kill the clan boss — the whole clan gets the chest (you too). Full league table in 📊 RATINGS.")}</div>
+        <button class="buy" style="display:block; width:100%; margin-top:10px; background:#7a1f1a; border-color:#a03a30; color:#ffd0c8;" ${(RAID.active&&RAID.kind==="clan")?"disabled":""} data-fn="clanLeave">🚪 ${T("ВЫЙТИ ИЗ КЛАНА","LEAVE THE CLAN")}</button>
+        <div class="small" style="margin-top:4px; color:#ff7a6a">${T("Выход сжигает прогресс недели и накладывает штраф: 24 ч без вступлений.","Leaving burns your weekly progress and sets a penalty: 24 h without joining.")}</div>`;
       }
     } else {
       h+=`
       <div class="card">
         <div class="info">
-          <div class="nm">⚔ РЕЙД: Призрак подземелья</div>
-          <div class="st">Слава: 💠 ${S.glory} | Бестиарий: ${S.bestiary} ${plural(S.bestiary,"монстр","монстра","монстров")} (+${S.bestiary*2}% золота)</div>
-          <div class="st">Факелы: ${S.torches?("🔥".repeat(S.torches)):"—"} ${S.torches<torchMax()?("(+1 через "+mm+":"+ss+")"):"(полны)"}</div>
-          <div class="st small">👑 Мировой босс — каждый день в 10:00 и 22:00 (2 часа)</div>
+          <div class="nm">⚔ ${T("РЕЙД: Призрак подземелья","RAID: Dungeon Ghost")}</div>
+          <div class="st">${T("Слава:","Glory:")} 💠 ${S.glory} | ${T("Бестиарий:","Bestiary:")} ${S.bestiary} ${plural(S.bestiary,T("монстр","monster"),T("монстра","monsters"),T("монстров","monsters"))} (+${S.bestiary*2}% ${T("золота","gold")})</div>
+          <div class="st">${T("Факелы:","Torches:")} ${S.torches?("🔥".repeat(S.torches)):"—"} ${S.torches<torchMax()?("(+1 "+T("через","in")+" "+mm+":"+ss+")"):T("(полны)","(full)")}</div>
+          <div class="st small">👑 ${T("Мировой босс — каждый день в 10:00 и 22:00 (2 часа)","World boss — every day at 10:00 and 22:00 (2 hours)")}</div>
         </div>
       </div>`;
       // 🌠 особые боссы: мировой (10:00/22:00), эпик (вс), мифик (раз в 15 дней)
       [worldBossInfo(),epicBossInfo(),mythicBossInfo()].forEach(bi=>{
         if(!bi.active) return;
         const done=(S[{world:"worldK",epic:"epicK",mythic:"mythicK"}[bi.kind]]||"")===bi.key;
-        const nm={world:"👑 МИРОВОЙ БОСС",epic:"🌟 ЭПИЧЕСКИЙ БОСС (воскресенье)",mythic:"🌌 МИФИЧЕСКИЙ БОСС (раз в 15 дней)"}[bi.kind];
+        const nm=bi.kind==="world"?T("👑 МИРОВОЙ БОСС","👑 WORLD BOSS"):bi.kind==="epic"?T("🌟 ЭПИЧЕСКИЙ БОСС (воскресенье)","🌟 EPIC BOSS (Sunday)"):T("🌌 МИФИЧЕСКИЙ БОСС (раз в 15 дней)","🌌 MYTHIC BOSS (every 15 days)");
         const sec=Math.max(0,Math.floor((bi.ends-Date.now())/1000));
         const hh=Math.floor(sec/3600), mr=String(Math.floor(sec%3600/60)).padStart(2,"0"), sr=String(sec%60).padStart(2,"0");
         const btn="start"+bi.kind[0].toUpperCase()+bi.kind.slice(1);
@@ -2576,24 +2576,24 @@ function renderList(){
         <div class="card">
           <div class="info">
             <div class="nm">${nm} ${"★".repeat(bi.stars)}</div>
-            <div class="st">🌠 Босс-гонка — доступен всем! HP ≈ этаж ${starFloor(bi.stars)} · ${dur} сек. Весь урон → награда: 💠 до ${{world:450,epic:1500,mythic:4500}[bi.kind]} · 💎 +${{world:1,epic:5,mythic:15}[bi.kind]} (полное убийство ×2)</div>
-            <div class="st">⏳ исчезнет через ${hh}:${mr}:${sr}</div>
+            <div class="st">🌠 ${T("Босс-гонка — доступен всем! HP ≈ этаж","Boss race — open to everyone! HP ≈ floor")} ${starFloor(bi.stars)} · ${dur} ${T("сек","sec")}. ${T("Весь урон → награда: 💠 до","All damage → reward: 💠 up to")} ${{world:450,epic:1500,mythic:4500}[bi.kind]} · 💎 +${{world:1,epic:5,mythic:15}[bi.kind]} (${T("полное убийство ×2","full kill ×2")})</div>
+            <div class="st">⏳ ${T("исчезнет через","vanishes in")} ${hh}:${mr}:${sr}</div>
           </div>
-          ${done?"<span class='st' style='color:#7fd17f'>✔ БОСС ДОБИТ — жди следующего окна</span>":`<button class="buy" ${(RAID.active||S.torches<=0)?"disabled ":""} data-fn="${btn}">⚔ НАПАСТЬ (−1 🔥)</button>`}
+          ${done?`<span class='st' style='color:#7fd17f'>✔ ${T("БОСС ДОБИТ — жди следующего окна","BOSS DOWN — wait for the next window")}</span>`:`<button class="buy" ${(RAID.active||S.torches<=0)?"disabled ":""} data-fn="${btn}">⚔ ${T("НАПАСТЬ (−1 🔥)","ATTACK (−1 🔥)")}</button>`}
         </div>`;
       });
       h+=`
       <div class="card">
         <div class="info">
           <div class="nm">${S.opp.n} ${"★".repeat(S.opp.t)}</div>
-          <div class="st">Сложность ≈ этаж ${starFloor(S.opp.t)} · 3 стража · 45 сек. Победа: золото и Слава по звёздам, шанс украсть монстра.</div>
+          <div class="st">${T("Сложность ≈ этаж","Difficulty ≈ floor")} ${starFloor(S.opp.t)} · 3 ${T("стража","guards")} · 45 ${T("сек","sec")}. ${T("Победа: золото и Слава по звёздам, шанс украсть монстра.","Victory: gold and glory by stars, a chance to steal a monster.")}</div>
         </div>
         <button class="buy" data-fn="rollOpp">🎲</button>
       </div>
       <button id="prestigeBtn" ${(S.torches>0&&S.floor>=3&&!RAID.active)?"":"disabled"} data-fn="startRaid">
-        ${RAID.active?"⚔ БОЙ ИДЁТ…":(S.torches>0?"⚔ НАПАСТЬ (−1 🔥)":(S.floor<3?"⚔ Рейды с 3-го этажа":"🔥 Факелы кончились"))}
+        ${RAID.active?T("⚔ БОЙ ИДЁТ…","⚔ FIGHT IN PROGRESS…"):(S.torches>0?T("⚔ НАПАСТЬ (−1 🔥)","⚔ ATTACK (−1 🔥)"):(S.floor<3?T("⚔ Рейды с 3-го этажа","⚔ Raids from floor 3"):T("🔥 Факелы кончились","🔥 Out of torches")))}
       </button>
-      <div class="small" style="margin-top:6px">В рейде анти-столл не работает: слабый DPS — стражи стоят. Покупай героев и кулак!</div>`;
+      <div class="small" style="margin-top:6px">${T("В рейде анти-столл не работает: слабый DPS — стражи стоят. Покупай героев и кулак!","In raids the anti-stall doesn't work: weak DPS — guards just stand there. Buy heroes and the fist!")}</div>`;
     }
     content.innerHTML=h;
     content.querySelectorAll("[data-wtab]").forEach(el=>{
