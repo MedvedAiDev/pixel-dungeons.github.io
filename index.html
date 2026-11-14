@@ -433,7 +433,7 @@ const DED_FAIL = [
   "Это был тактический перерыв. Я клянусь.",
 ];
 const DED_IDLE = [
-  "Запомни: 5 быстрых тапов подряд — шестой бьёт как три.",
+  "Запомни: серия быстрых тапов — и Кролёнка бьёт как кузнец.",
   "Хочешь душ — продавай данж Кредо. Он переплачивает… почти.",
   "Герои бьют сами. А тап — это твоё искусство.",
   "Этаж 5. Жилец жалуется, что тапать больно. Пусть терпит. — Д.К.",
@@ -465,6 +465,7 @@ function freshState(){
     gold:0, souls:0, floor:1, runBest:1, tapLvl:0,
     heroLvl:[0,0,0,0,0,0,0,0,0,0,0,0],
     tapStacks:0, breathT:0, clownT:0, clownB:0,
+    kroll:{crit:0, chain:0, auto:0}, // 🐰 дерево Кролёнки: крит, Контроша, автотап
     tQty:{tap:0, leg:0, mar:0},
     pity:0, firstPrestige:false, tapsDone:0, wave:1, hintKontra:false, tutFlags:{},
     lastQuip:0, lastSeen:0, rateBuf:[], rate:0,
@@ -506,6 +507,8 @@ function load(){
   if(!S.tutFlags || typeof S.tutFlags!=="object" || Array.isArray(S.tutFlags)) S.tutFlags={};
   if(!S.clan || typeof S.clan!=="object") S.clan=freshState().clan;
   if(typeof S.clan.pot!=="number") S.clan.pot=0; // 🙏 котёл клана
+  if(!S.kroll||typeof S.kroll!=="object") S.kroll={crit:0,chain:0,auto:0}; // 🐰 дерево Кролёнки (миграция)
+  ["crit","chain","auto"].forEach(k=>{ if(typeof S.kroll[k]!=="number"||S.kroll[k]<0) S.kroll[k]=0; });
   if(typeof S.clan.lvl!=="number") S.clan.lvl=0; // 🏰 уровень членства (0 = не установлен, берётся из CLANS)
   if(S.customClan!==undefined && S.customClan!==null && (typeof S.customClan!=="object"||!S.customClan.custom)) S.customClan=null;
   if(S.customClan&&S.customClan.custom){ // 🏰 свой клан возвращается в список как 7-й
@@ -844,6 +847,18 @@ function tapPlan(){
   const n=S.buyQty==="max"?geoPlan(r,c1):S.buyQty;
   return {n,total:geoPrice(r,c1,n||1)};
 }
+/* 🐰 ветки дерева Кролёнки (с капом): crit / chain / auto */
+function krollDef(kind){
+  return kind==="crit" ? {r:3.2,c1:2500,cap:10}
+       : kind==="chain"? {r:6,  c1:1500,cap:3}
+       :                 {r:10, c1:10000,cap:4};
+}
+function krollPlan(kind){
+  const d=krollDef(kind), lvl=(S.kroll&&S.kroll[kind])||0;
+  if(lvl>=d.cap) return {n:0,total:0,done:true};
+  const want=S.buyQty==="max"?(d.cap-lvl):Math.min(S.buyQty,d.cap-lvl);
+  return {n:want,total:geoPrice(d.r,d.c1,want||1)};
+}
 function heroPlan(i){
   const c1=heroCost(i), r=H_COST;
   const n=S.buyQty==="max"?geoPlan(r,c1):S.buyQty;
@@ -878,8 +893,14 @@ function critChance(){
   let c=0;
   if(S.heroLvl[3]>=50) c+=10; else if(S.heroLvl[3]>=25) c+=5;   // Огр
   if(S.heroLvl[7]>=50) c+=7; else if(S.heroLvl[7]>=25) c+=3;    // Пингвин
+  c+=(S.kroll&&S.kroll.crit||0)*2;                              // 🐰 Меткий глаз: +2%/ур
   if(clownOn()) c*=2;                                           // «Клоунада»: крит ×2
   return Math.min(80,Math.round(c));
+}
+function kontraNeed(){ return 5-Math.min(2,(S.kroll&&S.kroll.chain)||0); }  // 🐰 Контроша: серия 5→4→3
+function kontraMult(){ return 3+(((S.kroll&&S.kroll.chain)||0)>=3?1:0); }   // 🐰 на максе ветки удар ×4
+function autoTapsPS(){ // 🤖 авто-тапы в секунду: талант душ + ветка Кролёнки, суммарно не больше 5
+  return Math.min(5,(S.tQty.tap>=3?1:0)+((S.kroll&&S.kroll.auto)||0));
 }
 function totalDps(bossMode){
   let d=0;
@@ -900,7 +921,7 @@ function totalDps(bossMode){
   d*=corr.dpsMult;                                              // Коррупция башни: штраф к урону
   if(S.shop.dps) d*=1.5;                                        // Магазин: DPS ×1.5
   if(bossMode&&S.shop.boss) d*=2;                               // Магазин: урон по боссу ×2
-  if(S.tQty.tap>=3) d+=tapDmg(); // автотап (уже ограничен героиками внутри tapDmg)
+  if(autoTapsPS()) d+=tapDmg()*autoTapsPS(); // 🤖 автотап: талант душ + ветка Кролёнки
   d*=1+clanBonus("hero"); // бафф клана
   return Math.min(d, 1e+301);                                   // 🚫 страховка: DPS всегда ниже капа HP (1e302)
 }
@@ -1590,7 +1611,7 @@ function spawnWave(){
   if(S.floorTop>=150) try{ checkLegend("abyss"); }catch(e){} // 🌟 прорыв Бездны
   if(S.wave===10){
     if(M.info.kind==="boss"){ ded(pick(DED_BOSS)); sfxBossIn(); }
-    if(S.floor===3 && !S.hintKontra){ S.hintKontra=true; ded("5 быстрых тапов подряд — 6-й бьёт как три. Запомни: у меня память уже не та."); }
+    if(S.floor===3 && !S.hintKontra){ S.hintKontra=true; ded("Серия быстрых тапов — и Кролёнка бьёт как кузнец. Прокачай это во вкладке 🐰."); }
     if(M.info.intro){ ded(M.info.intro); sfxRaidIn(); }
     if(M.info.note) showNote(M.info.note);
     else if(S.floor>10 && S.floor%5===0 && S.floor%10!==0) showNote(NOTES[Math.floor(S.floor/5)%NOTES.length]);
@@ -1692,8 +1713,9 @@ function onTap(ev){
   streak = (now-lastTap<280) ? streak+1 : 1;
   lastTap=now;
   let mult=1;
-  if(streak>=5){ kontra=true; streak=0; showKontra(); }
-  if(kontra){ mult=3; kontra=false; }
+  const kNeed=kontraNeed(), kMult=kontraMult();
+  if(streak>=kNeed){ kontra=true; streak=0; showKontra(); }
+  if(kontra){ mult=kMult; kontra=false; }
   if(mult>1) S.tutFlags.kontra=true;
   if(S.heroLvl[1]>=25 && S.clownB && performance.now()<S.clownB) mult*=1.5; // Шут 25: тап ×1.5
   if(S.heroLvl[11]>=25) S.tapStacks=(S.tapStacks||0)+1;                     // Мясник 25: +1% за тап
@@ -2093,7 +2115,7 @@ function draw(now){
   });
   /* Кролёнка — главный герой в центре подковы, бьёт с каждым тапом */
   const kmap=SPRITES.krolyonka, kHalf=kmap.length*2.6/2;
-  const kAtk=(now-lastTap)<180;
+  const kAtk=(now-lastTap)<180 || (autoTapsPS()>0&&(now%1000)<180); // тап или авто-удар раз в секунду
   const kB=kAtk?Math.sin(now/40)*2:Math.sin(now/280)*2;
   const kDy=kAtk?-6:0;                                    // выпад вверх, к монстру
   const kx=CW*0.5, kFoot=HY-8+ARC_S;                      // стоит на дуге, в самой нижней точке подковы
@@ -2247,15 +2269,46 @@ function buyBtn(txt,enabled,fn){
 function renderList(){
   if(curTab==="tap"){
     const p=tapPlan();
+    const pc=krollPlan("crit"), pch=krollPlan("chain"), pa=krollPlan("auto");
+    const kN=kontraNeed(), kM=kontraMult();
     content.innerHTML=qtyBarWrap()+`
+      <div class="small" style="margin-bottom:6px">🐰 Дерево Кролёнки: четыре ветки за 💰 золото. Тело множит сам тап, Меткий глаз — крит, Контроша — серии, Автотап — урон без тапов.</div>
       <div class="card">
         <div class="info">
-          <div class="nm">Кролёнка ур.${S.tapLvl+1} <span class="small">главный герой</span></div>
+          <div class="nm">🐰 ТЕЛО — Кролёнка ур.${S.tapLvl+1} <span class="small">сила тапа</span></div>
           <div class="st">Тап-урон: ${fmt(tapDmg())} | Герои DPS: ${fmt(totalDps(M.info&&M.info.kind==="boss"))}</div>
-          <div class="st small">5 быстрых тапов → 6-й бьёт ×3 («Контроша»)</div>
+          <div class="st small">За уровень: тап ×1.65 · Крит: ${critChance()}% · Контроша: ${kN} тапов → ×${kM} · Автотап: ${autoTapsPS()} уд/сек</div>
         </div>
         ${buyBtn("💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""), p.n>0&&S.gold>=p.total, "buyTap")}
-      </div>`;
+      </div>
+      <div class="card">
+        <div class="info">
+          <div class="nm">🎯 МЕТКИЙ ГЛАЗ <span class="small">${S.kroll.crit}/10 · крит</span></div>
+          <div class="st">Шанс крита тапа: ${critChance()}%${S.kroll.crit<10?" → +2% за уровень":""}</div>
+          <div class="st small">Крит бьёт ×5 («Клоунада» — ×10). Общий шанс капается на 80%.</div>
+        </div>
+        ${pc.done?`<div class="st small" style="color:#7fd17f">✔ МАКС</div>`:buyBtn("💰 "+fmt(pc.total)+(pc.n>1?" ×"+pc.n:""), pc.n>0&&S.gold>=pc.total, "buyKroll_crit")}
+      </div>
+      <div class="card">
+        <div class="info">
+          <div class="nm">⚡ КОНТРОША <span class="small">${S.kroll.chain}/3 · серии</span></div>
+          <div class="st">Каждые ${kN} быстрых тапов → удар ×${kM}${S.kroll.chain<2?" → серия короче на 1":""}${S.kroll.chain===2?" → удар станет ×4":""}</div>
+          <div class="st small">Бей быстро подряд — шестой удар ломает челюсть.</div>
+        </div>
+        ${pch.done?`<div class="st small" style="color:#7fd17f">✔ МАКС</div>`:buyBtn("💰 "+fmt(pch.total)+(pch.n>1?" ×"+pch.n:""), pch.n>0&&S.gold>=pch.total, "buyKroll_chain")}
+      </div>
+      <div class="card">
+        <div class="info">
+          <div class="nm">🤖 АВТОТАП <span class="small">${S.kroll.auto}/4</span></div>
+          <div class="st">Авто-ударов/сек: ${autoTapsPS()}${S.kroll.auto<4?" → +1 за уровень":""}</div>
+          <div class="st small">Кролёнка бьёт сама — урон идёт в общий DPS, даже когда не тапаешь.</div>
+        </div>
+        ${pa.done?`<div class="st small" style="color:#7fd17f">✔ МАКС</div>`:buyBtn("💰 "+fmt(pa.total)+(pa.n>1?" ×"+pa.n:""), pa.n>0&&S.gold>=pa.total, "buyKroll_auto")}
+      </div>
+      <div class="card"><div class="info">
+        <div class="nm">🤝 КТО УСИЛИВАЕТ КРОЛЁНКУ</div>
+        <div class="st small">Огр 25/50 ур и Пингвин 25/50 ур — шанс крита · Шут 25 ур — тап ×1.5 на 10 сек · Мясник 25 ур — +1% за тап (до ×10) · «Клоунада» (Шут 50 + Пингвин 50) — тап ×2, крит ×2 · Талант душ 🌳 «Автотап» — +1 уд/сек (стакается с веткой до 5)</div>
+      </div></div>`;
   }
   if(curTab==="heroes"){
     let h=qtyBarWrap()+`<div class="small" style="margin-bottom:6px">Герои бьют сами каждую секунду. На 25 ур у героя открывается умение (у части — усиленное на 50). MAX покупает, сколько потянеш.</div>`;
@@ -2675,6 +2728,10 @@ function attachDelegated(){
         const p=tapPlan();
         if(p.n>0&&S.gold>=p.total){ S.gold-=p.total; S.tapLvl+=p.n; tapFx(); sfxBuy(); haptic("impact","medium"); }
       }
+      else if(f.startsWith("buyKroll_")){ // 🐰 ветки дерева Кролёнки
+        const kind=f.slice(9), p=krollPlan(kind);
+        if(p.n>0&&S.gold>=p.total){ S.gold-=p.total; S.kroll[kind]+=p.n; tapFx(); sfxBuy(); haptic("impact","medium"); }
+      }
       else if(f.startsWith("buyHero")){
         const i=+f.slice(7), p=heroPlan(i);
         if(p.n>0&&S.gold>=p.total){ S.gold-=p.total; S.heroLvl[i]+=p.n; heroFx(i); sfxBuy(); haptic("impact","medium"); checkAchievement("first_hero"); }
@@ -2801,7 +2858,7 @@ const tutEl=document.getElementById("tut");
 const TUT=[
  {nm:"Тап по монстру",      txt:"Тапай по монстру в проёме арки — каждый тап наносит урон. Начинай!",
    chk:()=>S.tapsDone>=8},
- {nm:"Контроша",            txt:"5 БЫСТРЫХ тапов подряд — 6-й бьёт ×3 (увидишь надпись «КОНТРОША!»). Собери ритм.",
+ {nm:"Контроша",            txt:"БЫСТРЫЕ тапы подряд — серия завершается ударом ×3 (с веткой ⚡ до ×4 и короче серии). Увидишь надпись «КОНТРОША!».",
    chk:()=>S.tutFlags.kontra},
  {nm:"Апгрейд кулака",      txt:"Открой вкладку 🐰 КРОЛЁНКА и купи апгрейд (25 💰) — тап-урон ×1.65 за уровень.",
    chk:()=>S.tapLvl>=1},
@@ -2858,6 +2915,7 @@ setInterval(()=>{
     content.querySelectorAll("button[data-fn]").forEach(b=>{
       const f=b.dataset.fn;
       if(f==="buyTap"){ const p=tapPlan(); b.disabled=p.n<1||S.gold<p.total; if(S.buyQty==="max") b.textContent="💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""); }
+      else if(f.startsWith("buyKroll_")){ const p=krollPlan(f.slice(9)); b.disabled=p.done||p.n<1||S.gold<p.total; if(S.buyQty==="max") b.textContent=p.done?"✔ МАКС":"💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""); }
       else if(f.startsWith("buyHero")){ const p=heroPlan(+f.slice(7)); b.disabled=p.n<1||S.gold<p.total; if(S.buyQty==="max") b.textContent="💰 "+fmt(p.total)+(p.n>1?" ×"+p.n:""); }
       else if(f.startsWith("buyTal_")) b.disabled=talPlan(f.slice(7)).k<1;
       else if(f==="startRaid") b.disabled=RAID.active||S.torches<=0||S.floor<3;
