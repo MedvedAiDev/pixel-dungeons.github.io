@@ -529,6 +529,9 @@ const NOTES_EN = [
 ];
 
 /* ================= СОСТОЯНИЕ ================= */
+/* 🛡 текст от игрока (имя/описание клана): HTML-спецсимволы вырезаем при вводе и загрузке, при выводе — экранируем */
+function cleanTxt(v,max){ return String(v==null?"":v).replace(/[<>&"'`]/g,"").replace(/[\u0000-\u001f]/g," ").trim().slice(0,max); }
+function esc(v){ return String(v==null?"":v).replace(/[&<>"'`]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"})[c]); }
 const SAVE_KEY = "krushiteli_save_v1";
 let S = null;
 
@@ -592,6 +595,7 @@ function load(){
     }
     if(typeof S.customClan.lvl!=="number"||S.customClan.lvl<1||S.customClan.lvl>10) S.customClan.lvl=1; // 🏰 уровень клана
     if(typeof S.customClan.desc!=="string") S.customClan.desc=""; // ✏ описание клана
+    S.customClan.desc=cleanTxt(S.customClan.desc,80); S.customClan.n=cleanTxt(S.customClan.n,24)||"Клан Крушителей"; // 🛡 чистка старых сейвов
     if(typeof S.customClan.pot!=="number") S.customClan.pot=0; // 🙏 котёл своего клана
     let ci=CLANS.findIndex(c=>c&&c.custom);
     if(ci<0){ CLANS.push(S.customClan); ci=CLANS.length-1; }
@@ -2524,7 +2528,7 @@ function renderList(){
           <div class="info">
             <div class="nm">🏰 ${T("СВОЙ КЛАН","YOUR OWN CLAN")} <span class="small">${T("донат","donate")}</span></div>
             ${clanCreateName?`
-            <div class="nm">🎁 ${T("ВЫБОР СТАРТОВОГО БАФФА · клан «","CHOOSING THE STARTING BUFF · clan '")}${clanCreateName}»</div>
+            <div class="nm">🎁 ${T("ВЫБОР СТАРТОВОГО БАФФА · клан «","CHOOSING THE STARTING BUFF · clan '")}${esc(clanCreateName)}»</div>
             <div class="st">${T("Один бафф — бесплатно, минимальный уровень (прокачаешь за 🩸 потом)","One buff for free, minimum level (upgrade with 🩸 later)")}</div>
             ${BUFF_BASE.map((b,i)=>`<div class="card"><div class="info"><div class="st">${buffTxt(b,1)}</div></div><button class="buy" data-fn="clanBuffPick_${i}">${T("ВЫБРАТЬ","PICK")}</button></div>`).join("")}
             <button class="buy" data-fn="clanBuffCancel">✖ ${T("ОТМЕНА","CANCEL")}</button>`:`
@@ -2543,7 +2547,7 @@ function renderList(){
         <div class="card"><div class="info">
           <div class="nm">🏰 ${cl.n}</div>
           <div class="st">${cl.motto}</div>
-          ${cl.custom&&cl.desc?`<div class="st">✏ ${cl.desc}</div>`:""}
+          ${cl.custom&&cl.desc?`<div class="st">✏ ${esc(cl.desc)}</div>`:""}
           ${cl.custom?"":`<div class="st">${T("Бафф клана: 🎁","Clan buff: 🎁")} ${cl.bTxt} <span class="small">${T("(у призраков не прокачивается)","(ghosts can't upgrade it)")}</span></div>`}
           <div class="st">${T("Личный вклад за неделю:","Your weekly contribution:")} ${fmt(c.contrib)} ${T("очк.","pts")}</div>
         </div>
@@ -2853,7 +2857,7 @@ function attachDelegated(){
       else if(f.startsWith("joinClan_")){ if(joinById(+f.slice(9))) renderList(); }
       else if(f==="clanLeave"){ leaveClan(); }
       else if(f==="createClan"&&!S.customClan&&S.blood>=50){ // 🏰 свой клан за 50 🩸: шаг 1 — имя
-        const nm=String(prompt("Название твоего клана:","Клан Крушителей")||"").trim().slice(0,24);
+        const nm=cleanTxt(prompt("Название твоего клана:","Клан Крушителей"),24);
         if(nm){ clanCreateName=nm; renderList(); haptic("select"); }
       }
       else if(f==="clanBuffCancel"){ clanCreateName=null; renderList(); haptic("select"); }
@@ -2884,7 +2888,7 @@ function attachDelegated(){
       else if(f.startsWith("clanBuffPick_")&&clanCreateName&&!S.customClan&&S.blood>=50){ // шаг 2 — бесплатный стартовый бафф
         const key=BUFF_BASE[+f.slice(13)];
         S.blood-=50; S.bloodSpent=(S.bloodSpent||0)+50;
-        const desc=(prompt("Описание клана (необязательно, до 80 символов):","")||"").slice(0,80);
+        const desc=cleanTxt(prompt("Описание клана (необязательно, до 80 символов):",""),80);
         S.customClan={n:clanCreateName, motto:"«Основано на крови. Работает на башню»", mem:2+Math.floor(Math.random()*10), custom:true, buffs:[{b:key, lvl:1}], lvl:1, pot:0, desc};
         CLANS.push(S.customClan);
         clanCreateName=null;
@@ -2901,7 +2905,7 @@ function attachDelegated(){
         sfxBuy(); haptic("notify","success");
       }
       else if(f==="clanDescEdit"&&S.customClan){ // ✏ описание клана
-        const d=(prompt("Описание клана (до 80 символов):",S.customClan.desc||"")||"").slice(0,80);
+        const d=cleanTxt(prompt("Описание клана (до 80 символов):",S.customClan.desc||""),80);
         S.customClan.desc=d; haptic("select");
       }
       else if(f==="clanHit"){ startRaid("clan"); haptic("impact","heavy"); }
